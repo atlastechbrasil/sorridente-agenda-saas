@@ -23,31 +23,31 @@ export const StatsCards = () => {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       <StatsCard
         title="Total de Pacientes"
-        value={patients?.length || 0}
+        value={String(patients?.length || 0)}
+        change="+12%"
         icon={Users}
-        trend="+12%"
-        trendUp={true}
+        trend="up"
       />
       <StatsCard
         title="Dentistas Ativos"
-        value={dentists?.length || 0}
+        value={String(dentists?.length || 0)}
+        change="+2%"
         icon={UserCheck}
-        trend="+2%"
-        trendUp={true}
+        trend="up"
       />
       <StatsCard
         title="Agendamentos Hoje"
-        value={todayAppointments}
+        value={String(todayAppointments)}
+        change="+8%"
         icon={Calendar}
-        trend="+8%"
-        trendUp={true}
+        trend="up"
       />
       <StatsCard
         title="Confirmados"
-        value={confirmedAppointments}
+        value={String(confirmedAppointments)}
+        change="+15%"
         icon={CalendarCheck}
-        trend="+15%"
-        trendUp={true}
+        trend="up"
       />
     </div>
   );
