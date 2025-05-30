@@ -9,7 +9,198 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      appointments: {
+        Row: {
+          appointment_date: string
+          appointment_time: string
+          created_at: string | null
+          created_by: string | null
+          dentist_id: string
+          duration: number | null
+          id: string
+          notes: string | null
+          patient_id: string
+          procedure_type: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          appointment_date: string
+          appointment_time: string
+          created_at?: string | null
+          created_by?: string | null
+          dentist_id: string
+          duration?: number | null
+          id?: string
+          notes?: string | null
+          patient_id: string
+          procedure_type: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          appointment_date?: string
+          appointment_time?: string
+          created_at?: string | null
+          created_by?: string | null
+          dentist_id?: string
+          duration?: number | null
+          id?: string
+          notes?: string | null
+          patient_id?: string
+          procedure_type?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_dentist_id_fkey"
+            columns: ["dentist_id"]
+            isOneToOne: false
+            referencedRelation: "dentists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dentists: {
+        Row: {
+          created_at: string | null
+          cro: string
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          schedule_end: string | null
+          schedule_start: string | null
+          specialty: string | null
+          updated_at: string | null
+          user_id: string | null
+          work_days: number[] | null
+        }
+        Insert: {
+          created_at?: string | null
+          cro: string
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+          schedule_end?: string | null
+          schedule_start?: string | null
+          specialty?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          work_days?: number[] | null
+        }
+        Update: {
+          created_at?: string | null
+          cro?: string
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          schedule_end?: string | null
+          schedule_start?: string | null
+          specialty?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          work_days?: number[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dentists_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      patients: {
+        Row: {
+          address: string | null
+          birth_date: string | null
+          created_at: string | null
+          email: string | null
+          emergency_contact: string | null
+          emergency_phone: string | null
+          id: string
+          medical_history: string | null
+          name: string
+          phone: string
+          updated_at: string | null
+        }
+        Insert: {
+          address?: string | null
+          birth_date?: string | null
+          created_at?: string | null
+          email?: string | null
+          emergency_contact?: string | null
+          emergency_phone?: string | null
+          id?: string
+          medical_history?: string | null
+          name: string
+          phone: string
+          updated_at?: string | null
+        }
+        Update: {
+          address?: string | null
+          birth_date?: string | null
+          created_at?: string | null
+          email?: string | null
+          emergency_contact?: string | null
+          emergency_phone?: string | null
+          id?: string
+          medical_history?: string | null
+          name?: string
+          phone?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          full_name: string
+          id: string
+          phone: string | null
+          role: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          full_name: string
+          id: string
+          phone?: string | null
+          role?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          full_name?: string
+          id?: string
+          phone?: string | null
+          role?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
