@@ -1,7 +1,7 @@
-import { Header } from "@/components/Layout/Header";
-import { Sidebar } from "@/components/Layout/Sidebar";
+
+import Header from "@/components/Layout/Header";
+import Sidebar from "@/components/Layout/Sidebar";
 import { StatsCards } from "@/components/Dashboard/StatsCards";
-import { useAppointments } from "@/hooks/useAppointments";
 
 const Dashboard = () => {
   return (

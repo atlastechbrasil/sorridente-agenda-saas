@@ -1,6 +1,6 @@
 
-import { Header } from "@/components/Layout/Header";
-import { Sidebar } from "@/components/Layout/Sidebar";
+import Header from "@/components/Layout/Header";
+import Sidebar from "@/components/Layout/Sidebar";
 import { AppointmentsList } from "@/components/Appointments/AppointmentsList";
 
 const Appointments = () => {

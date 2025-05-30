@@ -2,7 +2,7 @@
 import { usePatients } from '@/hooks/usePatients';
 import { useDentists } from '@/hooks/useDentists';
 import { useAppointments } from '@/hooks/useAppointments';
-import { StatsCard } from './StatsCard';
+import StatsCard from './StatsCard';
 import { Users, UserCheck, Calendar, CalendarCheck } from 'lucide-react';
 
 export const StatsCards = () => {

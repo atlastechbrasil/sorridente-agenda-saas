@@ -1,6 +1,6 @@
 
-import { Header } from "@/components/Layout/Header";
-import { Sidebar } from "@/components/Layout/Sidebar";
+import Header from "@/components/Layout/Header";
+import Sidebar from "@/components/Layout/Sidebar";
 import { DentistsList } from "@/components/Dentists/DentistsList";
 
 const Dentists = () => {
