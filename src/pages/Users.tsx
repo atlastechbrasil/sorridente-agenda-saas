@@ -5,7 +5,7 @@ import Sidebar from "@/components/Layout/Sidebar";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Trash2, Edit, Plus, Users } from 'lucide-react';
+import { Trash2, Edit, Plus, Users as UsersIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { usePermissions } from '@/hooks/usePermissions';
 import { UserModal } from '@/components/Users/UserModal';
@@ -144,7 +144,7 @@ const Users = () => {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
-                      <Users className="h-5 w-5" />
+                      <UsersIcon className="h-5 w-5" />
                       Lista de Usuários
                     </CardTitle>
                     <Button onClick={handleCreate}>
