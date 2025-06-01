@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,21 +28,39 @@ interface PatientFormData {
 }
 
 export const PatientModal = ({ isOpen, onClose, patient }: PatientModalProps) => {
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<PatientFormData>({
-    defaultValues: patient ? {
-      name: patient.name,
-      phone: patient.phone,
-      email: patient.email || '',
-      birth_date: patient.birth_date || '',
-      address: patient.address || '',
-      medical_history: patient.medical_history || '',
-      emergency_contact: patient.emergency_contact || '',
-      emergency_phone: patient.emergency_phone || '',
-    } : {}
-  });
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<PatientFormData>();
 
   const createPatient = useCreatePatient();
   const updatePatient = useUpdatePatient();
+
+  // Reset form with patient data when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (patient) {
+        reset({
+          name: patient.name,
+          phone: patient.phone,
+          email: patient.email || '',
+          birth_date: patient.birth_date || '',
+          address: patient.address || '',
+          medical_history: patient.medical_history || '',
+          emergency_contact: patient.emergency_contact || '',
+          emergency_phone: patient.emergency_phone || '',
+        });
+      } else {
+        reset({
+          name: '',
+          phone: '',
+          email: '',
+          birth_date: '',
+          address: '',
+          medical_history: '',
+          emergency_contact: '',
+          emergency_phone: '',
+        });
+      }
+    }
+  }, [isOpen, patient, reset]);
 
   const onSubmit = async (data: PatientFormData) => {
     try {
@@ -51,7 +69,6 @@ export const PatientModal = ({ isOpen, onClose, patient }: PatientModalProps) =>
       } else {
         await createPatient.mutateAsync(data);
       }
-      reset();
       onClose();
     } catch (error) {
       console.error('Erro ao salvar paciente:', error);

@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,28 +36,51 @@ interface AppointmentFormData {
 export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentModalProps) => {
   const { data: patients } = usePatients();
   const { data: dentists } = useDentists();
-  const [selectedPatient, setSelectedPatient] = useState(appointment?.patient_id || '');
-  const [selectedDentist, setSelectedDentist] = useState(appointment?.dentist_id || '');
-  const [selectedStatus, setSelectedStatus] = useState(appointment?.status || 'pending');
+  const [selectedPatient, setSelectedPatient] = useState('');
+  const [selectedDentist, setSelectedDentist] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('pending');
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<AppointmentFormData>({
-    defaultValues: appointment ? {
-      patient_id: appointment.patient_id,
-      dentist_id: appointment.dentist_id,
-      appointment_date: appointment.appointment_date,
-      appointment_time: appointment.appointment_time,
-      procedure_type: appointment.procedure_type,
-      duration: appointment.duration || 60,
-      notes: appointment.notes || '',
-      status: appointment.status,
-    } : {
-      duration: 60,
-      status: 'pending'
-    }
-  });
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<AppointmentFormData>();
 
   const createAppointment = useCreateAppointment();
   const updateAppointment = useUpdateAppointment();
+
+  // Reset form with appointment data when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (appointment) {
+        const formData = {
+          patient_id: appointment.patient_id,
+          dentist_id: appointment.dentist_id,
+          appointment_date: appointment.appointment_date,
+          appointment_time: appointment.appointment_time,
+          procedure_type: appointment.procedure_type,
+          duration: appointment.duration || 60,
+          notes: appointment.notes || '',
+          status: appointment.status,
+        };
+        
+        reset(formData);
+        setSelectedPatient(appointment.patient_id);
+        setSelectedDentist(appointment.dentist_id);
+        setSelectedStatus(appointment.status);
+      } else {
+        reset({
+          patient_id: '',
+          dentist_id: '',
+          appointment_date: '',
+          appointment_time: '',
+          procedure_type: '',
+          duration: 60,
+          notes: '',
+          status: 'pending'
+        });
+        setSelectedPatient('');
+        setSelectedDentist('');
+        setSelectedStatus('pending');
+      }
+    }
+  }, [isOpen, appointment, reset]);
 
   const onSubmit = async (data: AppointmentFormData) => {
     try {
@@ -73,7 +96,6 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
       } else {
         await createAppointment.mutateAsync(formData);
       }
-      reset();
       onClose();
     } catch (error) {
       console.error('Erro ao salvar agendamento:', error);

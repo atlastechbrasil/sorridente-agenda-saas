@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface Notification {
   id: string;
@@ -13,6 +14,7 @@ export interface Notification {
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const queryClient = useQueryClient();
 
   const addNotification = (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
     const newNotification: Notification = {
@@ -60,15 +62,34 @@ export const useNotifications = () => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  // Listen for query updates to trigger notifications
+  useEffect(() => {
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (event?.query?.queryKey?.[0] === 'appointments' && event.type === 'updated') {
+        // Check if it's a new appointment creation
+        const previousData = event.query.state.data;
+        if (previousData && Array.isArray(previousData)) {
+          addNotification({
+            title: 'Agendamento atualizado',
+            message: 'Um agendamento foi criado ou modificado',
+            type: 'info'
+          });
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [queryClient]);
+
   // Simulate some notifications for demonstration
   useEffect(() => {
     const timer = setTimeout(() => {
       addNotification({
-        title: 'Novo agendamento',
-        message: 'João Silva agendou uma consulta para amanhã às 14:00',
-        type: 'info'
+        title: 'Bem-vindo ao DentalCare Pro',
+        message: 'Sistema iniciado com sucesso',
+        type: 'success'
       });
-    }, 3000);
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, []);

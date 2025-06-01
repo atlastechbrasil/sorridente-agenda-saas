@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,18 +25,33 @@ interface DentistFormData {
 }
 
 export const DentistModal = ({ isOpen, onClose, dentist }: DentistModalProps) => {
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<DentistFormData>({
-    defaultValues: dentist ? {
-      name: dentist.name,
-      cro: dentist.cro,
-      email: dentist.email || '',
-      phone: dentist.phone || '',
-      specialty: dentist.specialty || '',
-    } : {}
-  });
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<DentistFormData>();
 
   const createDentist = useCreateDentist();
   const updateDentist = useUpdateDentist();
+
+  // Reset form with dentist data when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (dentist) {
+        reset({
+          name: dentist.name,
+          cro: dentist.cro,
+          email: dentist.email || '',
+          phone: dentist.phone || '',
+          specialty: dentist.specialty || '',
+        });
+      } else {
+        reset({
+          name: '',
+          cro: '',
+          email: '',
+          phone: '',
+          specialty: '',
+        });
+      }
+    }
+  }, [isOpen, dentist, reset]);
 
   const onSubmit = async (data: DentistFormData) => {
     try {
@@ -45,7 +60,6 @@ export const DentistModal = ({ isOpen, onClose, dentist }: DentistModalProps) =>
       } else {
         await createDentist.mutateAsync(data);
       }
-      reset();
       onClose();
     } catch (error) {
       console.error('Erro ao salvar dentista:', error);
