@@ -12,6 +12,7 @@ interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  resetPassword: (email: string) => Promise<boolean>;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
@@ -63,6 +64,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return false;
   };
 
+  const resetPassword = async (email: string): Promise<boolean> => {
+    // Simulação de reset de senha - em produção, fazer chamada para API
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Simula que sempre funciona para o email de teste
+    return email === 'admin@dentalcare.com';
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
@@ -71,7 +80,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated, isLoading }}>
+    <AuthContext.Provider value={{ user, login, logout, resetPassword, isAuthenticated, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

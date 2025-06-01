@@ -12,18 +12,39 @@ import { Loader2 } from 'lucide-react';
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login, isAuthenticated, isLoading } = useAuth();
+  const [isResetMode, setIsResetMode] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const { login, resetPassword, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !password) {
-      toast.error('Por favor, preencha todos os campos');
+    if (!email) {
+      toast.error('Por favor, preencha o email');
+      return;
+    }
+
+    if (isResetMode) {
+      setIsResetting(true);
+      const success = await resetPassword(email);
+      
+      if (success) {
+        toast.success('Email de redefinição enviado com sucesso!');
+        setIsResetMode(false);
+      } else {
+        toast.error('Email não encontrado');
+      }
+      setIsResetting(false);
+      return;
+    }
+
+    if (!password) {
+      toast.error('Por favor, preencha a senha');
       return;
     }
 
@@ -31,7 +52,7 @@ const Login = () => {
     
     if (success) {
       toast.success('Login realizado com sucesso!');
-      navigate('/');
+      navigate('/dashboard');
     } else {
       toast.error('Email ou senha incorretos');
     }
@@ -48,7 +69,7 @@ const Login = () => {
           </div>
           <CardTitle className="text-2xl text-center">DentalCare Pro</CardTitle>
           <p className="text-sm text-muted-foreground text-center">
-            Faça login para acessar o sistema
+            {isResetMode ? 'Redefinir senha' : 'Faça login para acessar o sistema'}
           </p>
         </CardHeader>
         <CardContent>
@@ -61,45 +82,60 @@ const Login = () => {
                 placeholder="seu@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
+                disabled={isLoading || isResetting}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Sua senha"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
+            {!isResetMode && (
+              <div className="space-y-2">
+                <Label htmlFor="password">Senha</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Sua senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+            )}
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={isLoading}
+              disabled={isLoading || isResetting}
             >
-              {isLoading ? (
+              {isLoading || isResetting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Entrando...
+                  {isResetMode ? 'Enviando...' : 'Entrando...'}
                 </>
               ) : (
-                'Entrar'
+                isResetMode ? 'Enviar Email' : 'Entrar'
               )}
             </Button>
           </form>
           
-          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-            <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-              Credenciais de teste:
-            </p>
-            <p className="text-xs text-blue-600 dark:text-blue-400">
-              Email: admin@dentalcare.com<br />
-              Senha: admin123
-            </p>
+          <div className="mt-4 text-center">
+            <Button
+              variant="link"
+              onClick={() => setIsResetMode(!isResetMode)}
+              disabled={isLoading || isResetting}
+              className="text-sm"
+            >
+              {isResetMode ? 'Voltar para login' : 'Esqueci minha senha'}
+            </Button>
           </div>
+          
+          {!isResetMode && (
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                Credenciais de teste:
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400">
+                Email: admin@dentalcare.com<br />
+                Senha: admin123
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

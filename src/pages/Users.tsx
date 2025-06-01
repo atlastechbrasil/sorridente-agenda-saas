@@ -1,0 +1,219 @@
+
+import { useState } from 'react';
+import Header from "@/components/Layout/Header";
+import Sidebar from "@/components/Layout/Sidebar";
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Trash2, Edit, Plus, Users } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { usePermissions } from '@/hooks/usePermissions';
+import { UserModal } from '@/components/Users/UserModal';
+import ProtectedRoute from '@/components/ProtectedRoute';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'dentist' | 'assistant';
+  createdAt: string;
+}
+
+const mockUsers: User[] = [
+  {
+    id: '1',
+    name: 'Dr. Silva',
+    email: 'admin@dentalcare.com',
+    role: 'admin',
+    createdAt: '2024-01-15'
+  },
+  {
+    id: '2',
+    name: 'Dr. Santos',
+    email: 'dentist@dentalcare.com',
+    role: 'dentist',
+    createdAt: '2024-01-20'
+  },
+  {
+    id: '3',
+    name: 'Maria Assistente',
+    email: 'assistant@dentalcare.com',
+    role: 'assistant',
+    createdAt: '2024-01-25'
+  }
+];
+
+const roleColors = {
+  admin: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300',
+  dentist: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
+  assistant: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
+};
+
+const roleLabels = {
+  admin: 'Administrador',
+  dentist: 'Dentista',
+  assistant: 'Assistente'
+};
+
+const Users = () => {
+  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const { hasPermission } = usePermissions();
+
+  if (!hasPermission('manage_users')) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+          <Header />
+          <div className="flex">
+            <Sidebar />
+            <main className="flex-1 p-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Acesso Negado</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-600 dark:text-gray-300">
+                    Você não tem permissão para gerenciar usuários.
+                  </p>
+                </CardContent>
+              </Card>
+            </main>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  const handleDelete = (id: string) => {
+    if (confirm('Tem certeza que deseja excluir este usuário?')) {
+      setUsers(users.filter(user => user.id !== id));
+    }
+  };
+
+  const handleEdit = (user: User) => {
+    setSelectedUser(user);
+    setIsModalOpen(true);
+  };
+
+  const handleCreate = () => {
+    setSelectedUser(null);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedUser(null);
+  };
+
+  const handleSave = (userData: Omit<User, 'id' | 'createdAt'>) => {
+    if (selectedUser) {
+      // Editar usuário existente
+      setUsers(users.map(user => 
+        user.id === selectedUser.id 
+          ? { ...user, ...userData }
+          : user
+      ));
+    } else {
+      // Criar novo usuário
+      const newUser: User = {
+        id: Math.random().toString(36).substr(2, 9),
+        ...userData,
+        createdAt: new Date().toISOString().split('T')[0]
+      };
+      setUsers([...users, newUser]);
+    }
+    handleCloseModal();
+  };
+
+  return (
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <Header />
+        <div className="flex">
+          <Sidebar />
+          <main className="flex-1 p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="mb-6">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Usuários</h1>
+                <p className="text-gray-600 dark:text-gray-300 mt-2">Gerencie os usuários do sistema</p>
+              </div>
+              
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      Lista de Usuários
+                    </CardTitle>
+                    <Button onClick={handleCreate}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Novo Usuário
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Função</TableHead>
+                        <TableHead>Data de Criação</TableHead>
+                        <TableHead>Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {users.map((user) => (
+                        <TableRow key={user.id}>
+                          <TableCell className="font-medium">{user.name}</TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>
+                            <Badge className={roleColors[user.role]}>
+                              {roleLabels[user.role]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {new Date(user.createdAt).toLocaleDateString('pt-BR')}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleEdit(user)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleDelete(user.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
+              <UserModal
+                isOpen={isModalOpen}
+                onClose={handleCloseModal}
+                onSave={handleSave}
+                user={selectedUser}
+              />
+            </div>
+          </main>
+        </div>
+      </div>
+    </ProtectedRoute>
+  );
+};
+
+export default Users;

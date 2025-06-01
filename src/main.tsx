@@ -15,6 +15,7 @@ import Dentists from "./pages/Dentists";
 import Appointments from "./pages/Appointments";
 import Settings from "./pages/Settings";
 import Reports from "./pages/Reports";
+import Users from "./pages/Users";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -29,11 +30,7 @@ createRoot(document.getElementById("root")!).render(
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
-              <Route path="/" element={
-                <ProtectedRoute>
-                  <Index />
-                </ProtectedRoute>
-              } />
+              <Route path="/" element={<Index />} />
               <Route path="/dashboard" element={
                 <ProtectedRoute>
                   <Dashboard />
@@ -52,6 +49,11 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/agendamentos" element={
                 <ProtectedRoute>
                   <Appointments />
+                </ProtectedRoute>
+              } />
+              <Route path="/usuarios" element={
+                <ProtectedRoute>
+                  <Users />
                 </ProtectedRoute>
               } />
               <Route path="/relatorios" element={

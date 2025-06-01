@@ -9,7 +9,8 @@ import {
   Settings, 
   FileText,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  UsersRound
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -19,10 +20,11 @@ const Sidebar = () => {
   const { hasPermission } = usePermissions();
 
   const menuItems = [
-    { icon: BarChart3, label: "Dashboard", path: "/", permission: 'view_dashboard' },
+    { icon: BarChart3, label: "Dashboard", path: "/dashboard", permission: 'view_dashboard' },
     { icon: Calendar, label: "Agendamentos", path: "/agendamentos", permission: 'manage_appointments' },
     { icon: Users, label: "Pacientes", path: "/pacientes", permission: 'manage_patients' },
     { icon: UserCheck, label: "Dentistas", path: "/dentistas", permission: 'manage_dentists' },
+    { icon: UsersRound, label: "Usuários", path: "/usuarios", permission: 'manage_users' },
     { icon: FileText, label: "Relatórios", path: "/relatorios", permission: 'view_reports' },
     { icon: Settings, label: "Configurações", path: "/configuracoes", permission: 'manage_settings' },
   ];
