@@ -1,8 +1,9 @@
 
-import { Bell, User } from "lucide-react";
+import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GlobalSearch } from './GlobalSearch';
 import { useNotifications } from '@/hooks/useNotifications';
+import UserMenu from './UserMenu';
 
 const Header = () => {
   const { unreadCount } = useNotifications();
@@ -22,19 +23,14 @@ const Header = () => {
         </div>
 
         <div className="flex items-center space-x-4">
-          <Button variant="ghost" size="icon" className="relative">
+          <Button variant="ghost" size="icon" className="relative dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700">
             <Bell className="w-5 h-5" />
             {unreadCount > 0 && (
               <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
             )}
           </Button>
           
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-              <User className="w-4 h-4 text-blue-600 dark:text-blue-300" />
-            </div>
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Dr. Silva</span>
-          </div>
+          <UserMenu />
         </div>
       </div>
     </header>

@@ -7,27 +7,33 @@ import {
   UserCheck, 
   BarChart3, 
   Settings, 
-  Clock,
+  FileText,
   ChevronLeft,
   ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const { hasPermission } = usePermissions();
 
   const menuItems = [
-    { icon: BarChart3, label: "Dashboard", path: "/" },
-    { icon: Calendar, label: "Agendamentos", path: "/agendamentos" },
-    { icon: Users, label: "Pacientes", path: "/pacientes" },
-    { icon: UserCheck, label: "Dentistas", path: "/dentistas" },
-    { icon: Clock, label: "Histórico", path: "/historico" },
-    { icon: Settings, label: "Configurações", path: "/configuracoes" },
+    { icon: BarChart3, label: "Dashboard", path: "/", permission: 'view_dashboard' },
+    { icon: Calendar, label: "Agendamentos", path: "/agendamentos", permission: 'manage_appointments' },
+    { icon: Users, label: "Pacientes", path: "/pacientes", permission: 'manage_patients' },
+    { icon: UserCheck, label: "Dentistas", path: "/dentistas", permission: 'manage_dentists' },
+    { icon: FileText, label: "Relatórios", path: "/relatorios", permission: 'view_reports' },
+    { icon: Settings, label: "Configurações", path: "/configuracoes", permission: 'manage_settings' },
   ];
+
+  const visibleItems = menuItems.filter(item => 
+    !item.permission || hasPermission(item.permission as any)
+  );
 
   return (
     <aside 
-      className={`bg-white border-r border-gray-200 transition-all duration-300 ${
+      className={`bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ${
         collapsed ? "w-16" : "w-64"
       }`}
     >
@@ -36,22 +42,22 @@ const Sidebar = () => {
           variant="ghost"
           size="icon"
           onClick={() => setCollapsed(!collapsed)}
-          className="ml-auto block"
+          className="ml-auto block dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700"
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </Button>
       </div>
 
       <nav className="px-4 space-y-2">
-        {menuItems.map((item) => (
+        {visibleItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
               `flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
                 isActive
-                  ? "bg-blue-50 text-blue-600 border-r-2 border-blue-600"
-                  : "text-gray-600 hover:bg-gray-50"
+                  ? "bg-blue-50 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 border-r-2 border-blue-600 dark:border-blue-400"
+                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               }`
             }
           >

@@ -1,38 +1,46 @@
 
 import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
-import { StatsCards } from "@/components/Dashboard/StatsCards";
+import StatsCards from "@/components/Dashboard/StatsCards";
+import { usePermissions } from "@/hooks/usePermissions";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 const Dashboard = () => {
+  const { hasPermission } = usePermissions();
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      <div className="flex">
-        <Sidebar />
-        <main className="flex-1 p-6">
-          <div className="max-w-7xl mx-auto">
-            <div className="mb-6">
-              <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-              <p className="text-gray-600 mt-2">Visão geral da clínica dental</p>
-            </div>
-            
-            <StatsCards />
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-4">Próximos Agendamentos</h2>
-                <p className="text-gray-600">Lista dos próximos agendamentos será exibida aqui</p>
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <Header />
+        <div className="flex">
+          <Sidebar />
+          <main className="flex-1 p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="mb-6">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+                <p className="text-gray-600 dark:text-gray-300 mt-2">Visão geral do sistema</p>
               </div>
               
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-4">Atividade Recente</h2>
-                <p className="text-gray-600">Atividades recentes da clínica serão exibidas aqui</p>
-              </div>
+              {hasPermission('view_dashboard') ? (
+                <StatsCards />
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Acesso Negado</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-600 dark:text-gray-300">
+                      Você não tem permissão para visualizar o dashboard.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
             </div>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 };
 
