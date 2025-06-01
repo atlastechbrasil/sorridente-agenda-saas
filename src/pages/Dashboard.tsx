@@ -1,7 +1,7 @@
 
 import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
-import StatsCards from "@/components/Dashboard/StatsCards";
+import { StatsCards } from "@/components/Dashboard/StatsCards";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ProtectedRoute from "@/components/ProtectedRoute";
