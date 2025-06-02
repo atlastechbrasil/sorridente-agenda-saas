@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -67,20 +66,23 @@ export const GlobalSearch = () => {
 
     // Search appointments
     appointments?.forEach(appointment => {
-      if (appointment.patients?.name.toLowerCase().includes(query.toLowerCase()) ||
-          appointment.dentists?.name.toLowerCase().includes(query.toLowerCase()) ||
+      const patientName = appointment.patients?.name || 'Paciente não encontrado';
+      const dentistName = appointment.dentists?.name || 'Dentista não encontrado';
+      
+      if (patientName.toLowerCase().includes(query.toLowerCase()) ||
+          dentistName.toLowerCase().includes(query.toLowerCase()) ||
           appointment.procedure_type.toLowerCase().includes(query.toLowerCase())) {
         searchResults.push({
           id: appointment.id,
           title: `${appointment.procedure_type}`,
-          subtitle: `Agendamento • ${appointment.patients?.name} - ${new Date(appointment.appointment_date).toLocaleDateString('pt-BR')}`,
+          subtitle: `Agendamento • ${patientName} - ${new Date(appointment.appointment_date).toLocaleDateString('pt-BR')}`,
           type: 'appointment',
           route: '/agendamentos'
         });
       }
     });
 
-    setResults(searchResults.slice(0, 10)); // Limit to 10 results
+    setResults(searchResults.slice(0, 10));
   }, [query, patients, dentists, appointments]);
 
   const handleResultClick = (result: SearchResult) => {

@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, List } from 'lucide-react';
 import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
-import AppointmentsList from "@/components/Appointments/AppointmentsList";
+import { AppointmentsList } from "@/components/Appointments/AppointmentsList";
 import AppointmentsCalendar from "@/components/Appointments/AppointmentsCalendar";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
@@ -13,7 +13,6 @@ const Appointments = () => {
 
   const handleAppointmentSelect = (appointment: any) => {
     setSelectedAppointment(appointment);
-    // You could open a modal or navigate to edit view here
     console.log('Selected appointment:', appointment);
   };
 

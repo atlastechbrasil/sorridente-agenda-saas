@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -44,7 +43,16 @@ export const useNotifications = () => {
         return;
       }
 
-      setNotifications(data || []);
+      const formattedNotifications: Notification[] = data?.map(notification => ({
+        id: notification.id,
+        title: notification.title,
+        message: notification.message,
+        type: notification.type as 'info' | 'success' | 'warning' | 'error',
+        created_at: notification.created_at || '',
+        read: notification.read || false
+      })) || [];
+
+      setNotifications(formattedNotifications);
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
@@ -69,7 +77,6 @@ export const useNotifications = () => {
           const newNotification = payload.new as Notification;
           setNotifications(prev => [newNotification, ...prev]);
           
-          // Show toast notification
           switch (newNotification.type) {
             case 'success':
               toast.success(newNotification.title, { description: newNotification.message });

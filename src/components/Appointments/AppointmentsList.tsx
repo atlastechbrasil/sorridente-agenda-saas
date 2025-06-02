@@ -95,9 +95,9 @@ export const AppointmentsList = () => {
               {appointments?.map((appointment) => (
                 <TableRow key={appointment.id}>
                   <TableCell className="font-medium">
-                    {appointment.patients?.name}
+                    {appointment.patients?.name || 'Paciente não encontrado'}
                   </TableCell>
-                  <TableCell>{appointment.dentists?.name}</TableCell>
+                  <TableCell>{appointment.dentists?.name || 'Dentista não encontrado'}</TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-1 text-sm">

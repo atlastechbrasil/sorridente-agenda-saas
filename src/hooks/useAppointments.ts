@@ -16,8 +16,8 @@ export const useAppointments = () => {
         .from('appointments')
         .select(`
           *,
-          patients(*),
-          dentists(*)
+          patients!appointments_patient_id_fkey(*),
+          dentists!appointments_dentist_id_fkey(*)
         `)
         .order('appointment_date', { ascending: true })
         .order('appointment_time', { ascending: true });

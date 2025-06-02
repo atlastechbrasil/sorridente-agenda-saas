@@ -45,8 +45,8 @@ const AppointmentsCalendar = ({ onAppointmentSelect }: AppointmentsCalendarProps
         .from('appointments')
         .select(`
           *,
-          patients(name),
-          dentists(name)
+          patients!appointments_patient_id_fkey(name),
+          dentists!appointments_dentist_id_fkey(name)
         `);
 
       if (error) {

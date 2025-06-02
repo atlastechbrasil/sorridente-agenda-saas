@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
@@ -35,7 +34,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
     const getInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -46,7 +44,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     getInitialSession();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         await loadUserProfile(session.user);
@@ -72,7 +69,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           id: profile.id,
           name: profile.full_name,
           email: profile.email,
-          role: profile.role
+          role: profile.role as 'admin' | 'dentist' | 'assistant'
         });
       }
     } catch (error) {

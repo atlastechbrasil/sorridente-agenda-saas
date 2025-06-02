@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
@@ -61,7 +60,7 @@ const Users = () => {
         id: profile.id,
         name: profile.full_name,
         email: profile.email,
-        role: profile.role,
+        role: profile.role as 'admin' | 'dentist' | 'assistant',
         createdAt: new Date(profile.created_at || '').toISOString().split('T')[0]
       }));
 
@@ -137,7 +136,6 @@ const Users = () => {
   const handleSave = async (userData: Omit<User, 'id' | 'createdAt'>) => {
     try {
       if (selectedUser) {
-        // Update existing user
         const { error: profileError } = await supabase
           .from('profiles')
           .update({
@@ -153,7 +151,6 @@ const Users = () => {
           return;
         }
 
-        // Update user role
         const { error: roleError } = await supabase
           .from('user_roles')
           .update({ role: userData.role })
@@ -165,7 +162,6 @@ const Users = () => {
 
         toast.success('Usuário atualizado com sucesso!');
       } else {
-        // Create new user
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: userData.email,
           password: 'temporaryPassword123',
