@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
@@ -14,6 +13,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 
 const Settings = () => {
   const { user, changePassword } = useAuth();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -24,6 +24,10 @@ const Settings = () => {
     email: user?.email || ''
   });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,9 +74,9 @@ const Settings = () => {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <Header />
+        <Header onMenuClick={toggleSidebar} />
         <div className="flex">
-          <Sidebar />
+          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
           <main className="flex-1 p-6">
             <div className="max-w-4xl mx-auto">
               <div className="mb-6">

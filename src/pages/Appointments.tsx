@@ -10,6 +10,11 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 
 const Appointments = () => {
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
 
   const handleAppointmentSelect = (appointment: any) => {
     setSelectedAppointment(appointment);
@@ -19,9 +24,9 @@ const Appointments = () => {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <Header />
+        <Header onMenuClick={toggleSidebar} />
         <div className="flex">
-          <Sidebar />
+          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
           <main className="flex-1 p-6">
             <div className="max-w-7xl mx-auto">
               <div className="mb-6">

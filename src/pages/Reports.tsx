@@ -1,4 +1,4 @@
-
+import { useState } from "react";
 import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,14 +8,19 @@ import { BarChart3, Calendar, Users, TrendingUp } from "lucide-react";
 
 const Reports = () => {
   const { hasPermission } = usePermissions();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
 
   if (!hasPermission('view_reports')) {
     return (
       <ProtectedRoute>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-          <Header />
+          <Header onMenuClick={toggleSidebar} />
           <div className="flex">
-            <Sidebar />
+            <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
             <main className="flex-1 p-6">
               <Card>
                 <CardHeader>
@@ -37,9 +42,9 @@ const Reports = () => {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <Header />
+        <Header onMenuClick={toggleSidebar} />
         <div className="flex">
-          <Sidebar />
+          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
           <main className="flex-1 p-6">
             <div className="max-w-7xl mx-auto">
               <div className="mb-6">
