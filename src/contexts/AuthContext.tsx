@@ -1,7 +1,9 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { User } from '@supabase/supabase-js';
 
-interface User {
+interface AuthUser {
   id: string;
   name: string;
   email: string;
@@ -9,10 +11,11 @@ interface User {
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   resetPassword: (email: string) => Promise<boolean>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
@@ -28,59 +31,126 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Verificar se há um usuário logado no localStorage
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setIsLoading(false);
+    // Get initial session
+    const getInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await loadUserProfile(session.user);
+      }
+      setIsLoading(false);
+    };
+
+    getInitialSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await loadUserProfile(session.user);
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  const loadUserProfile = async (authUser: User) => {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+
+      if (profile) {
+        setUser({
+          id: profile.id,
+          name: profile.full_name,
+          email: profile.email,
+          role: profile.role
+        });
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    }
+  };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
     
-    // Simulação de login - em produção, fazer chamada para API
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    if (email === 'admin@dentalcare.com' && password === 'admin123') {
-      const userData: User = {
-        id: '1',
-        name: 'Dr. Silva',
-        email: 'admin@dentalcare.com',
-        role: 'admin'
-      };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
       
-      setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
+      if (error) {
+        console.error('Login error:', error);
+        setIsLoading(false);
+        return false;
+      }
+
+      if (data.user) {
+        await loadUserProfile(data.user);
+      }
+      
       setIsLoading(false);
       return true;
+    } catch (error) {
+      console.error('Login error:', error);
+      setIsLoading(false);
+      return false;
     }
-    
-    setIsLoading(false);
-    return false;
   };
 
   const resetPassword = async (email: string): Promise<boolean> => {
-    // Simulação de reset de senha - em produção, fazer chamada para API
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Simula que sempre funciona para o email de teste
-    return email === 'admin@dentalcare.com';
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      
+      return !error;
+    } catch (error) {
+      console.error('Reset password error:', error);
+      return false;
+    }
   };
 
-  const logout = () => {
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+      
+      return !error;
+    } catch (error) {
+      console.error('Change password error:', error);
+      return false;
+    }
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('user');
   };
 
   const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, resetPassword, isAuthenticated, isLoading }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      resetPassword, 
+      changePassword,
+      isAuthenticated, 
+      isLoading 
+    }}>
       {children}
     </AuthContext.Provider>
   );

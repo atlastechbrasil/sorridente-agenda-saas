@@ -1,5 +1,7 @@
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 export type Permission = 
   | 'view_dashboard'
@@ -35,10 +37,45 @@ const rolePermissions: Record<string, Permission[]> = {
 
 export const usePermissions = () => {
   const { user } = useAuth();
+  const [userRoles, setUserRoles] = useState<string[]>([]);
+
+  useEffect(() => {
+    const loadUserRoles = async () => {
+      if (!user) {
+        setUserRoles([]);
+        return;
+      }
+
+      try {
+        const { data: roles } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id);
+
+        if (roles) {
+          setUserRoles(roles.map(r => r.role));
+        }
+      } catch (error) {
+        console.error('Error loading user roles:', error);
+      }
+    };
+
+    loadUserRoles();
+  }, [user]);
 
   const hasPermission = (permission: Permission): boolean => {
     if (!user) return false;
-    return rolePermissions[user.role]?.includes(permission) || false;
+    
+    // Check primary role from profile
+    const primaryRolePermissions = rolePermissions[user.role] || [];
+    if (primaryRolePermissions.includes(permission)) {
+      return true;
+    }
+
+    // Check additional roles
+    return userRoles.some(role => 
+      rolePermissions[role]?.includes(permission)
+    );
   };
 
   const hasAnyPermission = (permissions: Permission[]): boolean => {
@@ -53,6 +90,7 @@ export const usePermissions = () => {
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
-    userRole: user?.role
+    userRole: user?.role,
+    userRoles
   };
 };

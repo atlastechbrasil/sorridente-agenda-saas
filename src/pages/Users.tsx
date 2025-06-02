@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { usePermissions } from '@/hooks/usePermissions';
 import { UserModal } from '@/components/Users/UserModal';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface User {
   id: string;
@@ -18,30 +20,6 @@ interface User {
   role: 'admin' | 'dentist' | 'assistant';
   createdAt: string;
 }
-
-const mockUsers: User[] = [
-  {
-    id: '1',
-    name: 'Dr. Silva',
-    email: 'admin@dentalcare.com',
-    role: 'admin',
-    createdAt: '2024-01-15'
-  },
-  {
-    id: '2',
-    name: 'Dr. Santos',
-    email: 'dentist@dentalcare.com',
-    role: 'dentist',
-    createdAt: '2024-01-20'
-  },
-  {
-    id: '3',
-    name: 'Maria Assistente',
-    email: 'assistant@dentalcare.com',
-    role: 'assistant',
-    createdAt: '2024-01-25'
-  }
-];
 
 const roleColors = {
   admin: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300',
@@ -56,10 +34,45 @@ const roleLabels = {
 };
 
 const Users = () => {
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const { hasPermission } = usePermissions();
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading users:', error);
+        toast.error('Erro ao carregar usuários');
+        return;
+      }
+
+      const formattedUsers: User[] = profiles.map(profile => ({
+        id: profile.id,
+        name: profile.full_name,
+        email: profile.email,
+        role: profile.role,
+        createdAt: new Date(profile.created_at || '').toISOString().split('T')[0]
+      }));
+
+      setUsers(formattedUsers);
+    } catch (error) {
+      console.error('Error loading users:', error);
+      toast.error('Erro ao carregar usuários');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!hasPermission('manage_users')) {
     return (
@@ -86,9 +99,23 @@ const Users = () => {
     );
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir este usuário?')) {
-      setUsers(users.filter(user => user.id !== id));
+      try {
+        const { error } = await supabase.auth.admin.deleteUser(id);
+        
+        if (error) {
+          console.error('Error deleting user:', error);
+          toast.error('Erro ao excluir usuário');
+          return;
+        }
+
+        toast.success('Usuário excluído com sucesso!');
+        loadUsers();
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        toast.error('Erro ao excluir usuário');
+      }
     }
   };
 
@@ -107,25 +134,78 @@ const Users = () => {
     setSelectedUser(null);
   };
 
-  const handleSave = (userData: Omit<User, 'id' | 'createdAt'>) => {
-    if (selectedUser) {
-      // Editar usuário existente
-      setUsers(users.map(user => 
-        user.id === selectedUser.id 
-          ? { ...user, ...userData }
-          : user
-      ));
-    } else {
-      // Criar novo usuário
-      const newUser: User = {
-        id: Math.random().toString(36).substr(2, 9),
-        ...userData,
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      setUsers([...users, newUser]);
+  const handleSave = async (userData: Omit<User, 'id' | 'createdAt'>) => {
+    try {
+      if (selectedUser) {
+        // Update existing user
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            full_name: userData.name,
+            email: userData.email,
+            role: userData.role
+          })
+          .eq('id', selectedUser.id);
+
+        if (profileError) {
+          console.error('Error updating profile:', profileError);
+          toast.error('Erro ao atualizar usuário');
+          return;
+        }
+
+        // Update user role
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .update({ role: userData.role })
+          .eq('user_id', selectedUser.id);
+
+        if (roleError) {
+          console.error('Error updating role:', roleError);
+        }
+
+        toast.success('Usuário atualizado com sucesso!');
+      } else {
+        // Create new user
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: userData.email,
+          password: 'temporaryPassword123',
+          options: {
+            data: {
+              full_name: userData.name,
+              role: userData.role
+            }
+          }
+        });
+
+        if (authError) {
+          console.error('Error creating user:', authError);
+          toast.error('Erro ao criar usuário');
+          return;
+        }
+
+        toast.success('Usuário criado com sucesso! Uma senha temporária foi enviada por email.');
+      }
+
+      loadUsers();
+      handleCloseModal();
+    } catch (error) {
+      console.error('Error saving user:', error);
+      toast.error('Erro ao salvar usuário');
     }
-    handleCloseModal();
   };
+
+  if (loading) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <p className="text-gray-600 dark:text-gray-300">Carregando usuários...</p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute>
