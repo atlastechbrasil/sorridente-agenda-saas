@@ -18,7 +18,7 @@ interface User {
 interface UserModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (user: Omit<User, 'id' | 'createdAt'>) => void;
+  onSave: (user: Omit<User, 'id' | 'createdAt'> & { password?: string }) => void;
   user?: User | null;
 }
 
@@ -61,13 +61,19 @@ export const UserModal = ({ isOpen, onClose, onSave, user }: UserModalProps) => 
       return;
     }
 
-    onSave({
+    if (formData.password && formData.password.length < 6) {
+      toast.error('A senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    const userData = {
       name: formData.name,
       email: formData.email,
-      role: formData.role
-    });
+      role: formData.role,
+      ...(formData.password && { password: formData.password })
+    };
 
-    toast.success(user ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!');
+    onSave(userData);
   };
 
   return (
@@ -86,6 +92,7 @@ export const UserModal = ({ isOpen, onClose, onSave, user }: UserModalProps) => 
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="Nome do usuário"
+              required
             />
           </div>
           
@@ -97,6 +104,7 @@ export const UserModal = ({ isOpen, onClose, onSave, user }: UserModalProps) => 
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               placeholder="email@exemplo.com"
+              required
             />
           </div>
           
@@ -123,8 +131,15 @@ export const UserModal = ({ isOpen, onClose, onSave, user }: UserModalProps) => 
               type="password"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              placeholder={user ? 'Deixe em branco para manter a atual' : 'Digite a senha'}
+              placeholder={user ? 'Deixe em branco para manter a atual' : 'Mínimo 6 caracteres'}
+              minLength={6}
+              {...(!user && { required: true })}
             />
+            {!user && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                A senha deve ter pelo menos 6 caracteres
+              </p>
+            )}
           </div>
           
           <div className="flex justify-end space-x-2 pt-4">

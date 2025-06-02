@@ -15,12 +15,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
 
-const Sidebar = () => {
-  const [collapsed, setCollapsed] = useState(false);
+interface SidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
+const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
   const { hasPermission } = usePermissions();
 
   const menuItems = [
-    { icon: BarChart3, label: "Dashboard", path: "/dashboard", permission: 'view_dashboard' },
+    { icon: BarChart3, label: "Dashboard", path: "/", permission: 'view_dashboard' },
     { icon: Calendar, label: "Agendamentos", path: "/agendamentos", permission: 'manage_appointments' },
     { icon: Users, label: "Pacientes", path: "/pacientes", permission: 'manage_patients' },
     { icon: UserCheck, label: "Dentistas", path: "/dentistas", permission: 'manage_dentists' },
@@ -43,7 +47,7 @@ const Sidebar = () => {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={onToggle}
           className="ml-auto block dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700"
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}

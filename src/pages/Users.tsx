@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
@@ -33,11 +34,16 @@ const roleLabels = {
 };
 
 const Users = () => {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const { hasPermission } = usePermissions();
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
 
   useEffect(() => {
     loadUsers();
@@ -77,9 +83,9 @@ const Users = () => {
     return (
       <ProtectedRoute>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-          <Header />
+          <Header onMenuClick={toggleSidebar} />
           <div className="flex">
-            <Sidebar />
+            <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
             <main className="flex-1 p-6">
               <Card>
                 <CardHeader>
@@ -133,9 +139,10 @@ const Users = () => {
     setSelectedUser(null);
   };
 
-  const handleSave = async (userData: Omit<User, 'id' | 'createdAt'>) => {
+  const handleSave = async (userData: Omit<User, 'id' | 'createdAt'> & { password?: string }) => {
     try {
       if (selectedUser) {
+        // Atualizar usuário existente
         const { error: profileError } = await supabase
           .from('profiles')
           .update({
@@ -160,26 +167,73 @@ const Users = () => {
           console.error('Error updating role:', roleError);
         }
 
-        toast.success('Usuário atualizado com sucesso!');
+        // Se uma nova senha foi fornecida, atualize-a
+        if (userData.password && userData.password.length >= 6) {
+          const { error: passwordError } = await supabase.auth.admin.updateUserById(selectedUser.id, {
+            password: userData.password
+          });
+
+          if (passwordError) {
+            console.error('Error updating password:', passwordError);
+            toast.error('Usuário atualizado, mas erro ao alterar senha');
+          } else {
+            toast.success('Usuário e senha atualizados com sucesso!');
+          }
+        } else {
+          toast.success('Usuário atualizado com sucesso!');
+        }
       } else {
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        // Criar novo usuário
+        if (!userData.password || userData.password.length < 6) {
+          toast.error('Senha deve ter pelo menos 6 caracteres');
+          return;
+        }
+
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
           email: userData.email,
-          password: 'temporaryPassword123',
-          options: {
-            data: {
-              full_name: userData.name,
-              role: userData.role
-            }
+          password: userData.password,
+          email_confirm: true,
+          user_metadata: {
+            full_name: userData.name,
+            role: userData.role
           }
         });
 
         if (authError) {
           console.error('Error creating user:', authError);
-          toast.error('Erro ao criar usuário');
+          toast.error('Erro ao criar usuário: ' + authError.message);
           return;
         }
 
-        toast.success('Usuário criado com sucesso! Uma senha temporária foi enviada por email.');
+        if (authData.user) {
+          // Inserir perfil
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: authData.user.id,
+              full_name: userData.name,
+              email: userData.email,
+              role: userData.role
+            });
+
+          if (profileError) {
+            console.error('Error creating profile:', profileError);
+          }
+
+          // Inserir role
+          const { error: roleError } = await supabase
+            .from('user_roles')
+            .insert({
+              user_id: authData.user.id,
+              role: userData.role
+            });
+
+          if (roleError) {
+            console.error('Error creating user role:', roleError);
+          }
+
+          toast.success('Usuário criado com sucesso!');
+        }
       }
 
       loadUsers();
@@ -206,9 +260,9 @@ const Users = () => {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <Header />
+        <Header onMenuClick={toggleSidebar} />
         <div className="flex">
-          <Sidebar />
+          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
           <main className="flex-1 p-6">
             <div className="max-w-7xl mx-auto">
               <div className="mb-6">
