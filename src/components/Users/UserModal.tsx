@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface User {
   id: string;
@@ -29,6 +30,7 @@ export const UserModal = ({ isOpen, onClose, onSave, user }: UserModalProps) => 
     role: 'dentist' as 'admin' | 'dentist' | 'assistant',
     password: ''
   });
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -48,7 +50,38 @@ export const UserModal = ({ isOpen, onClose, onSave, user }: UserModalProps) => 
     }
   }, [user, isOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handlePasswordUpdate = async () => {
+    if (!user || !formData.password || formData.password.length < 6) {
+      toast.error('A senha deve ter pelo menos 6 caracteres');
+      return false;
+    }
+
+    try {
+      setIsUpdating(true);
+      
+      // Use the user's updateUser method for password changes
+      const { error } = await supabase.auth.updateUser({
+        password: formData.password
+      });
+
+      if (error) {
+        console.error('Error updating password:', error);
+        toast.error('Erro ao alterar senha: ' + error.message);
+        return false;
+      }
+
+      toast.success('Senha alterada com sucesso!');
+      return true;
+    } catch (error) {
+      console.error('Error updating password:', error);
+      toast.error('Erro ao alterar senha');
+      return false;
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.name || !formData.email) {
@@ -64,6 +97,14 @@ export const UserModal = ({ isOpen, onClose, onSave, user }: UserModalProps) => 
     if (formData.password && formData.password.length < 6) {
       toast.error('A senha deve ter pelo menos 6 caracteres');
       return;
+    }
+
+    // For existing users with password change
+    if (user && formData.password) {
+      const passwordUpdated = await handlePasswordUpdate();
+      if (!passwordUpdated) {
+        return;
+      }
     }
 
     const userData = {
@@ -143,11 +184,11 @@ export const UserModal = ({ isOpen, onClose, onSave, user }: UserModalProps) => 
           </div>
           
           <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isUpdating}>
               Cancelar
             </Button>
-            <Button type="submit">
-              {user ? 'Atualizar' : 'Criar'}
+            <Button type="submit" disabled={isUpdating}>
+              {isUpdating ? 'Atualizando...' : (user ? 'Atualizar' : 'Criar')}
             </Button>
           </div>
         </form>

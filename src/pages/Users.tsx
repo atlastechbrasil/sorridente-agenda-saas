@@ -51,6 +51,7 @@ const Users = () => {
 
   const loadUsers = async () => {
     try {
+      setLoading(true);
       const { data: profiles, error } = await supabase
         .from('profiles')
         .select('*')
@@ -107,12 +108,26 @@ const Users = () => {
   const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir este usuário?')) {
       try {
-        const { error } = await supabase.auth.admin.deleteUser(id);
-        
-        if (error) {
-          console.error('Error deleting user:', error);
+        // First delete from profiles table
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .delete()
+          .eq('id', id);
+
+        if (profileError) {
+          console.error('Error deleting profile:', profileError);
           toast.error('Erro ao excluir usuário');
           return;
+        }
+
+        // Delete from user_roles table
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .delete()
+          .eq('user_id', id);
+
+        if (roleError) {
+          console.error('Error deleting user role:', roleError);
         }
 
         toast.success('Usuário excluído com sucesso!');
@@ -167,21 +182,7 @@ const Users = () => {
           console.error('Error updating role:', roleError);
         }
 
-        // Se uma nova senha foi fornecida, atualize-a
-        if (userData.password && userData.password.length >= 6) {
-          const { error: passwordError } = await supabase.auth.admin.updateUserById(selectedUser.id, {
-            password: userData.password
-          });
-
-          if (passwordError) {
-            console.error('Error updating password:', passwordError);
-            toast.error('Usuário atualizado, mas erro ao alterar senha');
-          } else {
-            toast.success('Usuário e senha atualizados com sucesso!');
-          }
-        } else {
-          toast.success('Usuário atualizado com sucesso!');
-        }
+        toast.success('Usuário atualizado com sucesso!');
       } else {
         // Criar novo usuário
         if (!userData.password || userData.password.length < 6) {

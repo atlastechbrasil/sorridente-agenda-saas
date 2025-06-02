@@ -129,11 +129,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const changePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
     try {
+      // First, re-authenticate the user with current password
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      
+      if (!currentUser) {
+        console.error('No authenticated user found');
+        return false;
+      }
+
+      // Re-authenticate with current password
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: currentUser.email!,
+        password: currentPassword,
+      });
+
+      if (reauthError) {
+        console.error('Re-authentication failed:', reauthError);
+        return false;
+      }
+
+      // Now update the password
       const { error } = await supabase.auth.updateUser({
         password: newPassword
       });
       
-      return !error;
+      if (error) {
+        console.error('Password update error:', error);
+        return false;
+      }
+      
+      return true;
     } catch (error) {
       console.error('Change password error:', error);
       return false;
