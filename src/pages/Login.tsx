@@ -34,10 +34,10 @@ const Login = () => {
       const success = await resetPassword(email);
       
       if (success) {
-        toast.success('Email de redefinição enviado com sucesso!');
+        toast.success('Email de redefinição enviado com sucesso! Verifique sua caixa de entrada.');
         setIsResetMode(false);
       } else {
-        toast.error('Email não encontrado');
+        toast.error('Erro ao enviar email de redefinição. Verifique se o email está correto.');
       }
       setIsResetting(false);
       return;
@@ -124,18 +124,6 @@ const Login = () => {
               {isResetMode ? 'Voltar para login' : 'Esqueci minha senha'}
             </Button>
           </div>
-          
-          {!isResetMode && (
-            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-              <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-                Credenciais de teste:
-              </p>
-              <p className="text-xs text-blue-600 dark:text-blue-400">
-                Email: admin@dentalcare.com<br />
-                Senha: admin123
-              </p>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

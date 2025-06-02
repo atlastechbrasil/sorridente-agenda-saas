@@ -17,7 +17,7 @@ type ThemeContextType = {
 };
 
 const initialState: ThemeContextType = {
-  theme: 'system',
+  theme: 'light', // Mudando padrão para light
   isDark: false,
   setTheme: () => null,
   toggleTheme: () => null,
@@ -27,7 +27,7 @@ const ThemeContext = createContext<ThemeContextType>(initialState);
 
 export function ThemeProvider({
   children,
-  defaultTheme = 'system',
+  defaultTheme = 'light', // Mudando padrão para light
   storageKey = 'ui-theme',
   ...props
 }: ThemeProviderProps) {

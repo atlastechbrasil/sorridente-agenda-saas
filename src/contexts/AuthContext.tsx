@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
@@ -107,11 +108,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const resetPassword = async (email: string): Promise<boolean> => {
     try {
+      console.log('Attempting to reset password for email:', email);
+      
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}/login`,
       });
       
-      return !error;
+      if (error) {
+        console.error('Reset password error:', error);
+        return false;
+      }
+      
+      console.log('Password reset email sent successfully');
+      return true;
     } catch (error) {
       console.error('Reset password error:', error);
       return false;
