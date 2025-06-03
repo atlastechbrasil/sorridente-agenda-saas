@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Clock, User, Calendar as CalendarIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { AppointmentModal } from './AppointmentModal';
 
 interface Appointment {
   id: string;
@@ -17,6 +18,9 @@ interface Appointment {
   procedure_type: string;
   status: string;
   duration: number;
+  patient_id: string;
+  dentist_id: string;
+  notes?: string;
 }
 
 interface AppointmentsCalendarProps {
@@ -28,6 +32,8 @@ const AppointmentsCalendar = ({ onAppointmentSelect }: AppointmentsCalendarProps
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [dayAppointments, setDayAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     loadAppointments();
@@ -63,7 +69,10 @@ const AppointmentsCalendar = ({ onAppointmentSelect }: AppointmentsCalendarProps
         appointment_time: apt.appointment_time,
         procedure_type: apt.procedure_type,
         status: apt.status,
-        duration: apt.duration || 60
+        duration: apt.duration || 60,
+        patient_id: apt.patient_id,
+        dentist_id: apt.dentist_id,
+        notes: apt.notes
       }));
 
       setAppointments(formattedAppointments);
@@ -120,10 +129,18 @@ const AppointmentsCalendar = ({ onAppointmentSelect }: AppointmentsCalendarProps
   };
 
   const handleAppointmentClick = (appointment: Appointment) => {
+    console.log('Appointment clicked:', appointment);
+    setSelectedAppointment(appointment);
+    setIsModalOpen(true);
+    
     if (onAppointmentSelect) {
       onAppointmentSelect(appointment);
-      toast.success(`Agendamento selecionado: ${appointment.procedure_type}`);
     }
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedAppointment(null);
   };
 
   if (loading) {
@@ -135,103 +152,111 @@ const AppointmentsCalendar = ({ onAppointmentSelect }: AppointmentsCalendarProps
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5" />
-            Calendário
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Calendar
-            mode="single"
-            selected={date}
-            onSelect={setDate}
-            className="rounded-md border"
-            modifiers={{
-              hasAppointment: getAppointmentDates(),
-            }}
-            modifiersStyles={{
-              hasAppointment: {
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                fontWeight: 'bold',
-              },
-            }}
-          />
-        </CardContent>
-      </Card>
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5" />
+              Calendário
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Calendar
+              mode="single"
+              selected={date}
+              onSelect={setDate}
+              className="rounded-md border"
+              modifiers={{
+                hasAppointment: getAppointmentDates(),
+              }}
+              modifiersStyles={{
+                hasAppointment: {
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  fontWeight: 'bold',
+                },
+              }}
+            />
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Agendamentos do Dia
-            {date && (
-              <span className="text-sm font-normal text-gray-500">
-                {date.toLocaleDateString('pt-BR')}
-              </span>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {dayAppointments.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Nenhum agendamento para este dia</p>
-            </div>
-          ) : (
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {dayAppointments
-                .sort((a, b) => a.appointment_time.localeCompare(b.appointment_time))
-                .map((appointment) => (
-                  <div
-                    key={appointment.id}
-                    className="p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-blue-600" />
-                        <span className="font-medium">
-                          {appointment.appointment_time.slice(0, 5)}
-                        </span>
-                      </div>
-                      <Badge className={getStatusColor(appointment.status)}>
-                        {getStatusLabel(appointment.status)}
-                      </Badge>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <User className="h-3 w-3 text-gray-500" />
-                        <span className="text-sm text-gray-600 dark:text-gray-300">
-                          {appointment.patient_name}
-                        </span>
-                      </div>
-                      <p className="text-sm font-medium">
-                        {appointment.procedure_type}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Dr(a). {appointment.dentist_name} • {appointment.duration}min
-                      </p>
-                    </div>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full mt-2"
-                      onClick={() => handleAppointmentClick(appointment)}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Agendamentos do Dia
+              {date && (
+                <span className="text-sm font-normal text-gray-500">
+                  {date.toLocaleDateString('pt-BR')}
+                </span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {dayAppointments.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Nenhum agendamento para este dia</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {dayAppointments
+                  .sort((a, b) => a.appointment_time.localeCompare(b.appointment_time))
+                  .map((appointment) => (
+                    <div
+                      key={appointment.id}
+                      className="p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     >
-                      Ver Detalhes
-                    </Button>
-                  </div>
-                ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-blue-600" />
+                          <span className="font-medium">
+                            {appointment.appointment_time.slice(0, 5)}
+                          </span>
+                        </div>
+                        <Badge className={getStatusColor(appointment.status)}>
+                          {getStatusLabel(appointment.status)}
+                        </Badge>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <User className="h-3 w-3 text-gray-500" />
+                          <span className="text-sm text-gray-600 dark:text-gray-300">
+                            {appointment.patient_name}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium">
+                          {appointment.procedure_type}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Dr(a). {appointment.dentist_name} • {appointment.duration}min
+                        </p>
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full mt-2"
+                        onClick={() => handleAppointmentClick(appointment)}
+                      >
+                        Ver Detalhes
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <AppointmentModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        appointment={selectedAppointment}
+      />
+    </>
   );
 };
 

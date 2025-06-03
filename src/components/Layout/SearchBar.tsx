@@ -44,15 +44,20 @@ export const SearchBar = () => {
       return;
     }
 
+    console.log('Searching for:', query);
+    console.log('Available data:', { patients: patients?.length, dentists: dentists?.length, appointments: appointments?.length });
+
     const searchResults: SearchResult[] = [];
     const queryLower = query.toLowerCase();
 
     // Search patients
-    if (patients) {
+    if (patients && patients.length > 0) {
       patients.forEach(patient => {
-        if (patient.name.toLowerCase().includes(queryLower) ||
-            patient.phone.includes(query) ||
-            patient.email?.toLowerCase().includes(queryLower)) {
+        const matchesName = patient.name?.toLowerCase().includes(queryLower);
+        const matchesPhone = patient.phone?.includes(query);
+        const matchesEmail = patient.email?.toLowerCase().includes(queryLower);
+        
+        if (matchesName || matchesPhone || matchesEmail) {
           searchResults.push({
             id: patient.id,
             title: patient.name,
@@ -65,11 +70,13 @@ export const SearchBar = () => {
     }
 
     // Search dentists
-    if (dentists) {
+    if (dentists && dentists.length > 0) {
       dentists.forEach(dentist => {
-        if (dentist.name.toLowerCase().includes(queryLower) ||
-            dentist.cro.includes(query) ||
-            dentist.specialty?.toLowerCase().includes(queryLower)) {
+        const matchesName = dentist.name?.toLowerCase().includes(queryLower);
+        const matchesCro = dentist.cro?.includes(query);
+        const matchesSpecialty = dentist.specialty?.toLowerCase().includes(queryLower);
+        
+        if (matchesName || matchesCro || matchesSpecialty) {
           searchResults.push({
             id: dentist.id,
             title: dentist.name,
@@ -82,14 +89,16 @@ export const SearchBar = () => {
     }
 
     // Search appointments
-    if (appointments) {
+    if (appointments && appointments.length > 0) {
       appointments.forEach(appointment => {
         const patientName = appointment.patients?.name || 'Paciente não encontrado';
         const dentistName = appointment.dentists?.name || 'Dentista não encontrado';
         
-        if (patientName.toLowerCase().includes(queryLower) ||
-            dentistName.toLowerCase().includes(queryLower) ||
-            appointment.procedure_type.toLowerCase().includes(queryLower)) {
+        const matchesPatient = patientName.toLowerCase().includes(queryLower);
+        const matchesDentist = dentistName.toLowerCase().includes(queryLower);
+        const matchesProcedure = appointment.procedure_type?.toLowerCase().includes(queryLower);
+        
+        if (matchesPatient || matchesDentist || matchesProcedure) {
           searchResults.push({
             id: appointment.id,
             title: `${appointment.procedure_type}`,
@@ -101,10 +110,12 @@ export const SearchBar = () => {
       });
     }
 
+    console.log('Search results:', searchResults);
     setResults(searchResults.slice(0, 10));
   }, [query, patients, dentists, appointments]);
 
   const handleResultClick = (result: SearchResult) => {
+    console.log('Navigating to:', result.route);
     navigate(result.route);
     setIsOpen(false);
     setQuery('');

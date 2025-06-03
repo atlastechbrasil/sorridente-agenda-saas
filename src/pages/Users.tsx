@@ -52,9 +52,11 @@ const Users = () => {
   const loadUsers = async () => {
     try {
       setLoading(true);
+      console.log('Loading users...');
+      
       const { data: profiles, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, full_name, email, role, created_at')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -62,6 +64,8 @@ const Users = () => {
         toast.error('Erro ao carregar usuários');
         return;
       }
+
+      console.log('Loaded profiles:', profiles);
 
       const formattedUsers: User[] = profiles.map(profile => ({
         id: profile.id,
@@ -108,6 +112,19 @@ const Users = () => {
   const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir este usuário?')) {
       try {
+        console.log('Deleting user:', id);
+        
+        // First delete from user_roles
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .delete()
+          .eq('user_id', id);
+
+        if (roleError) {
+          console.error('Error deleting user role:', roleError);
+        }
+
+        // Then delete from profiles
         const { error: profileError } = await supabase
           .from('profiles')
           .delete()
@@ -117,15 +134,6 @@ const Users = () => {
           console.error('Error deleting profile:', profileError);
           toast.error('Erro ao excluir usuário');
           return;
-        }
-
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .delete()
-          .eq('user_id', id);
-
-        if (roleError) {
-          console.error('Error deleting user role:', roleError);
         }
 
         toast.success('Usuário excluído com sucesso!');
@@ -154,8 +162,10 @@ const Users = () => {
 
   const handleSave = async (userData: Omit<User, 'id' | 'createdAt'> & { password?: string }) => {
     try {
+      console.log('Saving user data:', userData);
+      
       if (selectedUser) {
-        // Atualizar usuário existente
+        // Update existing user
         const { error: profileError } = await supabase
           .from('profiles')
           .update({
@@ -171,6 +181,7 @@ const Users = () => {
           return;
         }
 
+        // Update user role
         const { error: roleError } = await supabase
           .from('user_roles')
           .upsert({ 
@@ -184,33 +195,41 @@ const Users = () => {
 
         toast.success('Usuário atualizado com sucesso!');
       } else {
-        // Criar novo usuário usando signUp normal
+        // Create new user
         if (!userData.password || userData.password.length < 6) {
           toast.error('Senha deve ter pelo menos 6 caracteres');
           return;
         }
 
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: userData.email,
-          password: userData.password,
-          options: {
-            data: {
-              full_name: userData.name,
-              role: userData.role
-            },
-            emailRedirectTo: `${window.location.origin}/`
-          }
-        });
+        console.log('Creating new user with email:', userData.email);
 
-        if (authError) {
-          console.error('Error creating user:', authError);
-          toast.error('Erro ao criar usuário: ' + authError.message);
+        // Get current user session to make admin request
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          toast.error('Sessão expirada. Faça login novamente.');
           return;
         }
 
-        if (authData.user) {
-          toast.success('Usuário criado com sucesso! Um email de confirmação foi enviado.');
+        // Use Supabase Admin API to create user
+        const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+          email: userData.email,
+          password: userData.password,
+          user_metadata: {
+            full_name: userData.name,
+            role: userData.role
+          },
+          email_confirm: true // Skip email confirmation
+        });
+
+        if (createError) {
+          console.error('Error creating user:', createError);
+          toast.error('Erro ao criar usuário: ' + createError.message);
+          return;
         }
+
+        console.log('User created successfully:', newUser);
+        toast.success('Usuário criado com sucesso!');
       }
 
       loadUsers();
@@ -306,6 +325,11 @@ const Users = () => {
                       ))}
                     </TableBody>
                   </Table>
+                  {users.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      Nenhum usuário encontrado
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

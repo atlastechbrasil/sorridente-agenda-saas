@@ -12,6 +12,7 @@ export const useAppointments = () => {
   return useQuery({
     queryKey: ['appointments'],
     queryFn: async () => {
+      console.log('Fetching appointments...');
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -22,9 +23,16 @@ export const useAppointments = () => {
         .order('appointment_date', { ascending: true })
         .order('appointment_time', { ascending: true });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching appointments:', error);
+        throw error;
+      }
+      
+      console.log('Appointments fetched:', data?.length);
       return data;
     },
+    staleTime: 30000, // 30 seconds
+    refetchOnWindowFocus: false,
   });
 };
 
