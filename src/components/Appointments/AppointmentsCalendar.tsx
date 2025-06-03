@@ -20,7 +20,7 @@ interface Appointment {
   duration: number;
   patient_id: string;
   dentist_id: string;
-  notes?: string;
+  notes: string;
   created_at: string;
   created_by: string;
   updated_at: string;
