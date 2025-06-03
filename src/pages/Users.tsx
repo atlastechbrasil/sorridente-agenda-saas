@@ -108,7 +108,6 @@ const Users = () => {
   const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir este usuário?')) {
       try {
-        // First delete from profiles table
         const { error: profileError } = await supabase
           .from('profiles')
           .delete()
@@ -120,7 +119,6 @@ const Users = () => {
           return;
         }
 
-        // Delete from user_roles table
         const { error: roleError } = await supabase
           .from('user_roles')
           .delete()
@@ -175,8 +173,10 @@ const Users = () => {
 
         const { error: roleError } = await supabase
           .from('user_roles')
-          .update({ role: userData.role })
-          .eq('user_id', selectedUser.id);
+          .upsert({ 
+            user_id: selectedUser.id, 
+            role: userData.role 
+          });
 
         if (roleError) {
           console.error('Error updating role:', roleError);
@@ -184,19 +184,21 @@ const Users = () => {
 
         toast.success('Usuário atualizado com sucesso!');
       } else {
-        // Criar novo usuário
+        // Criar novo usuário usando signUp normal
         if (!userData.password || userData.password.length < 6) {
           toast.error('Senha deve ter pelo menos 6 caracteres');
           return;
         }
 
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        const { data: authData, error: authError } = await supabase.auth.signUp({
           email: userData.email,
           password: userData.password,
-          email_confirm: true,
-          user_metadata: {
-            full_name: userData.name,
-            role: userData.role
+          options: {
+            data: {
+              full_name: userData.name,
+              role: userData.role
+            },
+            emailRedirectTo: `${window.location.origin}/`
           }
         });
 
@@ -207,33 +209,7 @@ const Users = () => {
         }
 
         if (authData.user) {
-          // Inserir perfil
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .insert({
-              id: authData.user.id,
-              full_name: userData.name,
-              email: userData.email,
-              role: userData.role
-            });
-
-          if (profileError) {
-            console.error('Error creating profile:', profileError);
-          }
-
-          // Inserir role
-          const { error: roleError } = await supabase
-            .from('user_roles')
-            .insert({
-              user_id: authData.user.id,
-              role: userData.role
-            });
-
-          if (roleError) {
-            console.error('Error creating user role:', roleError);
-          }
-
-          toast.success('Usuário criado com sucesso!');
+          toast.success('Usuário criado com sucesso! Um email de confirmação foi enviado.');
         }
       }
 

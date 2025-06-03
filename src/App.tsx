@@ -10,11 +10,19 @@ import Dashboard from "./pages/Dashboard";
 import Appointments from "./pages/Appointments";
 import Patients from "./pages/Patients";
 import Dentists from "./pages/Dentists";
+import Users from "./pages/Users";
 import Login from "./pages/Login";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutos
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -30,8 +38,8 @@ const App = () => (
               <Route path="/agendamentos" element={<Appointments />} />
               <Route path="/pacientes" element={<Patients />} />
               <Route path="/dentistas" element={<Dentists />} />
+              <Route path="/usuarios" element={<Users />} />
               <Route path="/configuracoes" element={<Settings />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

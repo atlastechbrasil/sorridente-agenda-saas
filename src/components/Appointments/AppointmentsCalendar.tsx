@@ -119,6 +119,13 @@ const AppointmentsCalendar = ({ onAppointmentSelect }: AppointmentsCalendarProps
     }
   };
 
+  const handleAppointmentClick = (appointment: Appointment) => {
+    if (onAppointmentSelect) {
+      onAppointmentSelect(appointment);
+      toast.success(`Agendamento selecionado: ${appointment.procedure_type}`);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -181,8 +188,7 @@ const AppointmentsCalendar = ({ onAppointmentSelect }: AppointmentsCalendarProps
                 .map((appointment) => (
                   <div
                     key={appointment.id}
-                    className="p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-                    onClick={() => onAppointmentSelect?.(appointment)}
+                    className="p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
@@ -211,19 +217,14 @@ const AppointmentsCalendar = ({ onAppointmentSelect }: AppointmentsCalendarProps
                       </p>
                     </div>
                     
-                    {onAppointmentSelect && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full mt-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAppointmentSelect(appointment);
-                        }}
-                      >
-                        Ver Detalhes
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full mt-2"
+                      onClick={() => handleAppointmentClick(appointment)}
+                    >
+                      Ver Detalhes
+                    </Button>
                   </div>
                 ))}
             </div>
