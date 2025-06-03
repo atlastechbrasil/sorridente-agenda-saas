@@ -14,6 +14,7 @@ import Patients from "./pages/Patients";
 import Dentists from "./pages/Dentists";
 import Appointments from "./pages/Appointments";
 import Settings from "./pages/Settings";
+import Procedures from "./pages/Procedures";
 import Reports from "./pages/Reports";
 import Users from "./pages/Users";
 import Login from "./pages/Login";
@@ -64,6 +65,11 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/configuracoes" element={
                 <ProtectedRoute>
                   <Settings />
+                </ProtectedRoute>
+              } />
+              <Route path="/procedimentos" element={
+                <ProtectedRoute>
+                  <Procedures />
                 </ProtectedRoute>
               } />
               <Route path="*" element={<NotFound />} />
