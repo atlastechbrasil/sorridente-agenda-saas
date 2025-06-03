@@ -21,6 +21,9 @@ interface Appointment {
   patient_id: string;
   dentist_id: string;
   notes?: string;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
 }
 
 interface AppointmentsCalendarProps {
@@ -47,6 +50,7 @@ const AppointmentsCalendar = ({ onAppointmentSelect }: AppointmentsCalendarProps
 
   const loadAppointments = async () => {
     try {
+      console.log('Loading appointments...');
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -61,6 +65,8 @@ const AppointmentsCalendar = ({ onAppointmentSelect }: AppointmentsCalendarProps
         return;
       }
 
+      console.log('Raw appointments data:', data);
+
       const formattedAppointments: Appointment[] = data.map(apt => ({
         id: apt.id,
         patient_name: apt.patients?.name || 'Paciente não encontrado',
@@ -72,9 +78,13 @@ const AppointmentsCalendar = ({ onAppointmentSelect }: AppointmentsCalendarProps
         duration: apt.duration || 60,
         patient_id: apt.patient_id,
         dentist_id: apt.dentist_id,
-        notes: apt.notes
+        notes: apt.notes || '',
+        created_at: apt.created_at,
+        created_by: apt.created_by || '',
+        updated_at: apt.updated_at
       }));
 
+      console.log('Formatted appointments:', formattedAppointments);
       setAppointments(formattedAppointments);
     } catch (error) {
       console.error('Error loading appointments:', error);
@@ -87,6 +97,7 @@ const AppointmentsCalendar = ({ onAppointmentSelect }: AppointmentsCalendarProps
   const filterAppointmentsByDate = (selectedDate: Date) => {
     const dateString = selectedDate.toISOString().split('T')[0];
     const dayApps = appointments.filter(apt => apt.appointment_date === dateString);
+    console.log('Filtering appointments for date:', dateString, 'Found:', dayApps.length);
     setDayAppointments(dayApps);
   };
 
