@@ -35,28 +35,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const getInitialSession = async () => {
+  const getInitialSession = async () => {
+    try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         await loadUserProfile(session.user);
       }
+    } catch (error) {
+      // Logue o erro para debug
+      console.error('Erro ao buscar sessão inicial:', error);
+      setUser(null);
+    } finally {
       setIsLoading(false);
-    };
+    }
+  };
 
-    getInitialSession();
+  getInitialSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    try {
       if (session?.user) {
         await loadUserProfile(session.user);
       } else {
         setUser(null);
       }
+    } catch (error) {
+      console.error('Erro no onAuthStateChange:', error);
+      setUser(null);
+    } finally {
       setIsLoading(false);
-    });
+    }
+  });
 
-    return () => subscription.unsubscribe();
-  }, []);
-
+  return () => subscription.unsubscribe();
+}, []);
   const loadUserProfile = async (authUser: User) => {
     try {
       const { data: profile } = await supabase
