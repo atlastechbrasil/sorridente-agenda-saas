@@ -10,6 +10,7 @@ export type Permission =
   | 'manage_dentists'
   | 'view_reports'
   | 'manage_settings'
+  | 'manage_procedures'
   | 'manage_users';
 
 const rolePermissions: Record<string, Permission[]> = {
@@ -20,6 +21,7 @@ const rolePermissions: Record<string, Permission[]> = {
     'manage_dentists',
     'view_reports',
     'manage_settings',
+    'manage_procedures',
     'manage_users'
   ],
   dentist: [
