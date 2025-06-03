@@ -1,11 +1,10 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/contexts/ThemeContext";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Dashboard from "./pages/Dashboard";
 import Appointments from "./pages/Appointments";
 import Patients from "./pages/Patients";
@@ -25,6 +24,21 @@ const queryClient = new QueryClient({
   },
 });
 
+// Componente para proteger rotas
+function ProtectedRoute({ children }: { children: JSX.Element }) {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div>Carregando...</div>;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">
@@ -35,13 +49,62 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/agendamentos" element={<Appointments />} />
-              <Route path="/pacientes" element={<Patients />} />
-              <Route path="/dentistas" element={<Dentists />} />
-              <Route path="/procedimentos" element={<Procedures />} />
-              <Route path="/usuarios" element={<Users />} />
-              <Route path="/configuracoes" element={<Settings />} />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/agendamentos"
+                element={
+                  <ProtectedRoute>
+                    <Appointments />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/pacientes"
+                element={
+                  <ProtectedRoute>
+                    <Patients />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dentistas"
+                element={
+                  <ProtectedRoute>
+                    <Dentists />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/procedimentos"
+                element={
+                  <ProtectedRoute>
+                    <Procedures />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/usuarios"
+                element={
+                  <ProtectedRoute>
+                    <Users />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/configuracoes"
+                element={
+                  <ProtectedRoute>
+                    <Settings />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
