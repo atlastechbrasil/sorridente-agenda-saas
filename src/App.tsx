@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import Appointments from "./pages/Appointments";
 import Patients from "./pages/Patients";
 import Dentists from "./pages/Dentists";
+import Procedures from "./pages/Procedures";
 import Users from "./pages/Users";
 import Login from "./pages/Login";
 import Settings from "./pages/Settings";
@@ -38,6 +39,7 @@ const App = () => (
               <Route path="/agendamentos" element={<Appointments />} />
               <Route path="/pacientes" element={<Patients />} />
               <Route path="/dentistas" element={<Dentists />} />
+              <Route path="/procedimentos" element={<Procedures />} />
               <Route path="/usuarios" element={<Users />} />
               <Route path="/configuracoes" element={<Settings />} />
               <Route path="*" element={<NotFound />} />

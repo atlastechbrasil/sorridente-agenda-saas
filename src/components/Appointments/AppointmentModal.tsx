@@ -6,10 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useCreateAppointment, useUpdateAppointment } from '@/hooks/useAppointments';
 import { usePatients } from '@/hooks/usePatients';
 import { useDentists } from '@/hooks/useDentists';
+import { useProcedures } from '@/hooks/useProcedures';
 import { Tables } from '@/integrations/supabase/types';
+import { DollarSign } from 'lucide-react';
 
 type Appointment = Tables<'appointments'> & {
   patients?: Tables<'patients'>;
@@ -27,7 +30,6 @@ interface AppointmentFormData {
   dentist_id: string;
   appointment_date: string;
   appointment_time: string;
-  procedure_type: string;
   duration?: number;
   notes?: string;
   status: string;
@@ -36,14 +38,31 @@ interface AppointmentFormData {
 export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentModalProps) => {
   const { data: patients } = usePatients();
   const { data: dentists } = useDentists();
+  const { data: procedures } = useProcedures();
   const [selectedPatient, setSelectedPatient] = useState('');
   const [selectedDentist, setSelectedDentist] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('pending');
+  const [selectedProcedures, setSelectedProcedures] = useState<string[]>([]);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<AppointmentFormData>();
 
   const createAppointment = useCreateAppointment();
   const updateAppointment = useUpdateAppointment();
+
+  // Calculate total price and duration
+  const calculateTotals = () => {
+    if (!procedures || selectedProcedures.length === 0) {
+      return { totalPrice: 0, totalDuration: 60 };
+    }
+
+    const selectedProcedureData = procedures.filter(p => selectedProcedures.includes(p.id));
+    const totalPrice = selectedProcedureData.reduce((sum, p) => sum + p.price, 0);
+    const totalDuration = selectedProcedureData.reduce((sum, p) => sum + (p.duration || 60), 0);
+
+    return { totalPrice, totalDuration };
+  };
+
+  const { totalPrice, totalDuration } = calculateTotals();
 
   // Reset form with appointment data when modal opens
   useEffect(() => {
@@ -54,7 +73,6 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
           dentist_id: appointment.dentist_id,
           appointment_date: appointment.appointment_date,
           appointment_time: appointment.appointment_time,
-          procedure_type: appointment.procedure_type,
           duration: appointment.duration || 60,
           notes: appointment.notes || '',
           status: appointment.status,
@@ -64,13 +82,14 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
         setSelectedPatient(appointment.patient_id);
         setSelectedDentist(appointment.dentist_id);
         setSelectedStatus(appointment.status);
+        // TODO: Load selected procedures for existing appointments
+        setSelectedProcedures([]);
       } else {
         reset({
           patient_id: '',
           dentist_id: '',
           appointment_date: '',
           appointment_time: '',
-          procedure_type: '',
           duration: 60,
           notes: '',
           status: 'pending'
@@ -78,23 +97,41 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
         setSelectedPatient('');
         setSelectedDentist('');
         setSelectedStatus('pending');
+        setSelectedProcedures([]);
       }
     }
   }, [isOpen, appointment, reset]);
 
+  const handleProcedureToggle = (procedureId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedProcedures(prev => [...prev, procedureId]);
+    } else {
+      setSelectedProcedures(prev => prev.filter(id => id !== procedureId));
+    }
+  };
+
   const onSubmit = async (data: AppointmentFormData) => {
     try {
+      if (selectedProcedures.length === 0) {
+        alert('Selecione pelo menos um procedimento');
+        return;
+      }
+
       const formData = {
         ...data,
         patient_id: selectedPatient,
         dentist_id: selectedDentist,
         status: selectedStatus,
+        duration: totalDuration,
+        procedure_type: procedures?.filter(p => selectedProcedures.includes(p.id)).map(p => p.name).join(', ') || ''
       };
 
       if (appointment) {
         await updateAppointment.mutateAsync({ id: appointment.id, ...formData });
+        // TODO: Update appointment_procedures table
       } else {
-        await createAppointment.mutateAsync(formData);
+        const newAppointment = await createAppointment.mutateAsync(formData);
+        // TODO: Insert into appointment_procedures table
       }
       onClose();
     } catch (error) {
@@ -107,12 +144,20 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
     setSelectedPatient('');
     setSelectedDentist('');
     setSelectedStatus('pending');
+    setSelectedProcedures([]);
     onClose();
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {appointment ? 'Editar Agendamento' : 'Novo Agendamento'}
@@ -179,42 +224,68 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
               )}
             </div>
           </div>
-          
+
           <div>
-            <Label htmlFor="procedure_type">Tipo de Procedimento *</Label>
-            <Input
-              id="procedure_type"
-              {...register('procedure_type', { required: 'Tipo de procedimento é obrigatório' })}
-            />
-            {errors.procedure_type && (
-              <span className="text-red-500 text-sm">{errors.procedure_type.message}</span>
+            <Label>Procedimentos *</Label>
+            <div className="border rounded-lg p-4 max-h-48 overflow-y-auto">
+              <div className="grid grid-cols-1 gap-3">
+                {procedures?.map((procedure) => (
+                  <div key={procedure.id} className="flex items-center justify-between p-2 border rounded">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id={procedure.id}
+                        checked={selectedProcedures.includes(procedure.id)}
+                        onCheckedChange={(checked) => handleProcedureToggle(procedure.id, checked as boolean)}
+                      />
+                      <div>
+                        <label htmlFor={procedure.id} className="text-sm font-medium cursor-pointer">
+                          {procedure.name}
+                        </label>
+                        {procedure.description && (
+                          <p className="text-xs text-gray-500">{procedure.description}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="flex items-center gap-1 text-green-600 font-medium">
+                        <DollarSign className="h-3 w-3" />
+                        {formatCurrency(procedure.price)}
+                      </div>
+                      <div className="text-xs text-gray-500">{procedure.duration}min</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {selectedProcedures.length > 0 && (
+              <div className="mt-2 p-3 bg-blue-50 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Total:</span>
+                  <div className="text-right">
+                    <div className="flex items-center gap-1 text-green-600 font-bold">
+                      <DollarSign className="h-4 w-4" />
+                      {formatCurrency(totalPrice)}
+                    </div>
+                    <div className="text-sm text-gray-600">{totalDuration} minutos</div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="duration">Duração (minutos)</Label>
-              <Input
-                id="duration"
-                type="number"
-                {...register('duration')}
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="status">Status</Label>
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pendente</SelectItem>
-                  <SelectItem value="confirmed">Confirmado</SelectItem>
-                  <SelectItem value="completed">Concluído</SelectItem>
-                  <SelectItem value="cancelled">Cancelado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div>
+            <Label htmlFor="status">Status</Label>
+            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="confirmed">Confirmado</SelectItem>
+                <SelectItem value="completed">Concluído</SelectItem>
+                <SelectItem value="cancelled">Cancelado</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           
           <div>

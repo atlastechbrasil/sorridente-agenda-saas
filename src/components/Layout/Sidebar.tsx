@@ -10,7 +10,8 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-  UsersRound
+  UsersRound,
+  Stethoscope
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -28,6 +29,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
     { icon: Calendar, label: "Agendamentos", path: "/agendamentos", permission: 'manage_appointments' },
     { icon: Users, label: "Pacientes", path: "/pacientes", permission: 'manage_patients' },
     { icon: UserCheck, label: "Dentistas", path: "/dentistas", permission: 'manage_dentists' },
+    { icon: Stethoscope, label: "Procedimentos", path: "/procedimentos", permission: 'manage_procedures' },
     { icon: UsersRound, label: "Usuários", path: "/usuarios", permission: 'manage_users' },
     { icon: FileText, label: "Relatórios", path: "/relatorios", permission: 'view_reports' },
     { icon: Settings, label: "Configurações", path: "/configuracoes", permission: 'manage_settings' },

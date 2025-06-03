@@ -9,6 +9,45 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      appointment_procedures: {
+        Row: {
+          appointment_id: string
+          created_at: string
+          id: string
+          price: number
+          procedure_id: string
+        }
+        Insert: {
+          appointment_id: string
+          created_at?: string
+          id?: string
+          price: number
+          procedure_id: string
+        }
+        Update: {
+          appointment_id?: string
+          created_at?: string
+          id?: string
+          price?: number
+          procedure_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_procedures_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointment_procedures_procedure_id_fkey"
+            columns: ["procedure_id"]
+            isOneToOne: false
+            referencedRelation: "procedures"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           appointment_date: string
@@ -212,6 +251,39 @@ export type Database = {
           name?: string
           phone?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      procedures: {
+        Row: {
+          active: boolean | null
+          created_at: string
+          description: string | null
+          duration: number | null
+          id: string
+          name: string
+          price: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string
+          description?: string | null
+          duration?: number | null
+          id?: string
+          name: string
+          price: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string
+          description?: string | null
+          duration?: number | null
+          id?: string
+          name?: string
+          price?: number
+          updated_at?: string
         }
         Relationships: []
       }
