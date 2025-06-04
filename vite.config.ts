@@ -8,12 +8,11 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
-    allowedHosts: ['n8nalex-dentista.zn6b4j.easypanel.host'],
   },
   plugins: [
     react(),
-    //mode === 'development' &&
-    (mode === 'development' && !process.env.LOVABLE_PREVIEW) && componentTagger(),
+    mode === 'development' &&
+    componentTagger(),
   ].filter(Boolean),
   resolve: {
     alias: {
