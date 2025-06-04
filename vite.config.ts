@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    allowedHosts: ['n8nalex-dentista.zn6b4j.easypanel.host'],
   },
   plugins: [
     react(),
