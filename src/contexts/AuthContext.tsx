@@ -64,14 +64,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
 
-    // Configurar listener de mudanças de auth PRIMEIRO
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Configurar listener de mudanças de auth - SEM async
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
       
       console.log('Auth state change:', event, session?.user?.id);
       
       if (session?.user) {
-        await loadUserProfile(session.user);
+        // Usar setTimeout para evitar bloqueio do listener
+        setTimeout(() => {
+          if (mounted) {
+            loadUserProfile(session.user);
+          }
+        }, 0);
       } else {
         setUser(null);
       }
@@ -79,7 +84,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(false);
     });
 
-    // Verificar sessão inicial DEPOIS
+    // Verificar sessão inicial
     const getInitialSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
