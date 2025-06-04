@@ -45,35 +45,72 @@ const Users = () => {
   };
 
   useEffect(() => {
-    loadUsers();
-  }, []);
+    if (hasPermission('manage_users')) {
+      loadUsers();
+    }
+  }, [hasPermission]);
 
   const loadUsers = async () => {
     try {
       setLoading(true);
-      console.log('Loading users...');
+      console.log('Loading all users...');
       
-      const { data: profiles, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, role, created_at')
-        .order('created_at', { ascending: false });
+      // Get all auth users first using the service role via edge function or RPC
+      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+      
+      if (authError) {
+        console.error('Error loading auth users:', authError);
+        // Fallback to profiles only
+        const { data: profiles, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+          
+        if (profileError) {
+          console.error('Error loading profiles:', profileError);
+          toast.error('Erro ao carregar usuários');
+          return;
+        }
 
-      if (error) {
-        console.error('Error loading users:', error);
-        toast.error('Erro ao carregar usuários');
+        const formattedUsers: User[] = profiles.map(profile => ({
+          id: profile.id,
+          name: profile.full_name || profile.email,
+          email: profile.email,
+          role: profile.role as 'admin' | 'dentist' | 'assistant',
+          createdAt: new Date(profile.created_at || '').toISOString().split('T')[0]
+        }));
+
+        setUsers(formattedUsers);
         return;
       }
 
-      console.log('Loaded profiles:', profiles);
+      // Get corresponding profiles for each auth user
+      const userIds = authUsers.users.map(user => user.id);
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', userIds)
+        .order('created_at', { ascending: false });
 
-      const formattedUsers: User[] = profiles.map(profile => ({
-        id: profile.id,
-        name: profile.full_name || profile.email,
-        email: profile.email,
-        role: profile.role as 'admin' | 'dentist' | 'assistant',
-        createdAt: new Date(profile.created_at || '').toISOString().split('T')[0]
-      }));
+      if (profileError) {
+        console.error('Error loading profiles:', profileError);
+        toast.error('Erro ao carregar perfis dos usuários');
+        return;
+      }
 
+      // Combine auth users with profiles
+      const formattedUsers: User[] = authUsers.users.map(authUser => {
+        const profile = profiles.find(p => p.id === authUser.id);
+        return {
+          id: authUser.id,
+          name: profile?.full_name || authUser.email || 'Usuário sem nome',
+          email: authUser.email || profile?.email || 'Email não encontrado',
+          role: (profile?.role as 'admin' | 'dentist' | 'assistant') || 'dentist',
+          createdAt: new Date(authUser.created_at).toISOString().split('T')[0]
+        };
+      });
+
+      console.log('Loaded users:', formattedUsers.length);
       setUsers(formattedUsers);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -111,6 +148,7 @@ const Users = () => {
       try {
         console.log('Deleting user:', id);
         
+        // Delete user roles first
         const { error: roleError } = await supabase
           .from('user_roles')
           .delete()
@@ -120,6 +158,7 @@ const Users = () => {
           console.error('Error deleting user role:', roleError);
         }
 
+        // Delete profile
         const { error: profileError } = await supabase
           .from('profiles')
           .delete()
@@ -127,8 +166,18 @@ const Users = () => {
 
         if (profileError) {
           console.error('Error deleting profile:', profileError);
-          toast.error('Erro ao excluir usuário');
+          toast.error('Erro ao excluir perfil do usuário');
           return;
+        }
+
+        // Try to delete auth user (may not work with RLS)
+        try {
+          const { error: authError } = await supabase.auth.admin.deleteUser(id);
+          if (authError) {
+            console.warn('Could not delete auth user:', authError);
+          }
+        } catch (authDeleteError) {
+          console.warn('Auth user deletion failed:', authDeleteError);
         }
 
         toast.success('Usuário excluído com sucesso!');
@@ -253,7 +302,7 @@ const Users = () => {
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
                     <UsersIcon className="h-5 w-5" />
-                    Lista de Usuários
+                    Lista de Usuários ({users.length})
                   </CardTitle>
                   <Button onClick={handleCreate}>
                     <Plus className="h-4 w-4 mr-2" />

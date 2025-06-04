@@ -1,10 +1,9 @@
-
 import { useState, useEffect } from 'react';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clock, User, Calendar as CalendarIcon } from 'lucide-react';
+import { Clock, User, Calendar as CalendarIcon, CalendarX } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { AppointmentModal } from './AppointmentModal';
@@ -207,7 +206,7 @@ const AppointmentsCalendar = ({ onAppointmentSelect }: AppointmentsCalendarProps
           <CardContent>
             {dayAppointments.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <CalendarX className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">Nenhum agendamento para este dia</p>
               </div>
             ) : (

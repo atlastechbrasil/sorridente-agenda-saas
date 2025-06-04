@@ -23,9 +23,9 @@ export const SearchBar = () => {
   const searchRef = useRef<HTMLDivElement>(null);
   
   const navigate = useNavigate();
-  const { data: patients } = usePatients();
-  const { data: dentists } = useDentists();
-  const { data: appointments } = useAppointments();
+  const { data: patients, isLoading: patientsLoading } = usePatients();
+  const { data: dentists, isLoading: dentistsLoading } = useDentists();
+  const { data: appointments, isLoading: appointmentsLoading } = useAppointments();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -44,8 +44,17 @@ export const SearchBar = () => {
       return;
     }
 
+    // Wait for data to load before searching
+    if (patientsLoading || dentistsLoading || appointmentsLoading) {
+      return;
+    }
+
     console.log('Searching for:', query);
-    console.log('Available data:', { patients: patients?.length, dentists: dentists?.length, appointments: appointments?.length });
+    console.log('Available data:', { 
+      patients: patients?.length || 0, 
+      dentists: dentists?.length || 0, 
+      appointments: appointments?.length || 0 
+    });
 
     const searchResults: SearchResult[] = [];
     const queryLower = query.toLowerCase();
@@ -110,9 +119,9 @@ export const SearchBar = () => {
       });
     }
 
-    console.log('Search results:', searchResults);
+    console.log('Search results found:', searchResults.length);
     setResults(searchResults.slice(0, 10));
-  }, [query, patients, dentists, appointments]);
+  }, [query, patients, dentists, appointments, patientsLoading, dentistsLoading, appointmentsLoading]);
 
   const handleResultClick = (result: SearchResult) => {
     console.log('Navigating to:', result.route);
@@ -127,6 +136,8 @@ export const SearchBar = () => {
     setIsOpen(false);
   };
 
+  const isLoading = patientsLoading || dentistsLoading || appointmentsLoading;
+
   return (
     <div className="relative w-80" ref={searchRef}>
       <div className="relative">
@@ -140,6 +151,7 @@ export const SearchBar = () => {
           }}
           onFocus={() => setIsOpen(query.length > 0)}
           className="pl-10 pr-10"
+          disabled={isLoading}
         />
         {query && (
           <Button
@@ -155,7 +167,11 @@ export const SearchBar = () => {
 
       {isOpen && query.length >= 2 && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-50 max-h-80 overflow-y-auto">
-          {results.length > 0 ? (
+          {isLoading ? (
+            <div className="p-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+              Buscando...
+            </div>
+          ) : results.length > 0 ? (
             <div className="p-2">
               {results.map((result) => (
                 <button

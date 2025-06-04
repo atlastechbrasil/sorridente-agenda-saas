@@ -13,6 +13,7 @@ import { useDentists } from '@/hooks/useDentists';
 import { useProcedures } from '@/hooks/useProcedures';
 import { Tables } from '@/integrations/supabase/types';
 import { DollarSign } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 type Appointment = Tables<'appointments'> & {
   patients?: Tables<'patients'>;
@@ -43,11 +44,38 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
   const [selectedDentist, setSelectedDentist] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('pending');
   const [selectedProcedures, setSelectedProcedures] = useState<string[]>([]);
+  const [loadingProcedures, setLoadingProcedures] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<AppointmentFormData>();
 
   const createAppointment = useCreateAppointment();
   const updateAppointment = useUpdateAppointment();
+
+  // Load existing appointment procedures
+  const loadAppointmentProcedures = async (appointmentId: string) => {
+    try {
+      setLoadingProcedures(true);
+      console.log('Loading procedures for appointment:', appointmentId);
+      
+      const { data: appointmentProcedures, error } = await supabase
+        .from('appointment_procedures')
+        .select('procedure_id')
+        .eq('appointment_id', appointmentId);
+
+      if (error) {
+        console.error('Error loading appointment procedures:', error);
+        return;
+      }
+
+      const procedureIds = appointmentProcedures.map(ap => ap.procedure_id);
+      console.log('Found procedure IDs:', procedureIds);
+      setSelectedProcedures(procedureIds);
+    } catch (error) {
+      console.error('Error loading appointment procedures:', error);
+    } finally {
+      setLoadingProcedures(false);
+    }
+  };
 
   // Calculate total price and duration
   const calculateTotals = () => {
@@ -56,7 +84,7 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
     }
 
     const selectedProcedureData = procedures.filter(p => selectedProcedures.includes(p.id));
-    const totalPrice = selectedProcedureData.reduce((sum, p) => sum + p.price, 0);
+    const totalPrice = selectedProcedureData.reduce((sum, p) => sum + Number(p.price), 0);
     const totalDuration = selectedProcedureData.reduce((sum, p) => sum + (p.duration || 60), 0);
 
     return { totalPrice, totalDuration };
@@ -82,8 +110,9 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
         setSelectedPatient(appointment.patient_id);
         setSelectedDentist(appointment.dentist_id);
         setSelectedStatus(appointment.status);
-        // TODO: Load selected procedures for existing appointments
-        setSelectedProcedures([]);
+        
+        // Load the selected procedures for this appointment
+        loadAppointmentProcedures(appointment.id);
       } else {
         reset({
           patient_id: '',
@@ -110,6 +139,40 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
     }
   };
 
+  const saveAppointmentProcedures = async (appointmentId: string) => {
+    try {
+      // First, delete existing appointment procedures
+      await supabase
+        .from('appointment_procedures')
+        .delete()
+        .eq('appointment_id', appointmentId);
+
+      // Then insert new ones
+      if (selectedProcedures.length > 0 && procedures) {
+        const appointmentProceduresToInsert = selectedProcedures.map(procedureId => {
+          const procedure = procedures.find(p => p.id === procedureId);
+          return {
+            appointment_id: appointmentId,
+            procedure_id: procedureId,
+            price: procedure?.price || 0
+          };
+        });
+
+        const { error } = await supabase
+          .from('appointment_procedures')
+          .insert(appointmentProceduresToInsert);
+
+        if (error) {
+          console.error('Error saving appointment procedures:', error);
+          throw error;
+        }
+      }
+    } catch (error) {
+      console.error('Error saving appointment procedures:', error);
+      throw error;
+    }
+  };
+
   const onSubmit = async (data: AppointmentFormData) => {
     try {
       if (selectedProcedures.length === 0) {
@@ -126,13 +189,19 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
         procedure_type: procedures?.filter(p => selectedProcedures.includes(p.id)).map(p => p.name).join(', ') || ''
       };
 
+      let appointmentId: string;
+
       if (appointment) {
-        await updateAppointment.mutateAsync({ id: appointment.id, ...formData });
-        // TODO: Update appointment_procedures table
+        const updatedAppointment = await updateAppointment.mutateAsync({ id: appointment.id, ...formData });
+        appointmentId = appointment.id;
       } else {
         const newAppointment = await createAppointment.mutateAsync(formData);
-        // TODO: Insert into appointment_procedures table
+        appointmentId = newAppointment.id;
       }
+
+      // Save appointment procedures
+      await saveAppointmentProcedures(appointmentId);
+      
       onClose();
     } catch (error) {
       console.error('Erro ao salvar agendamento:', error);
@@ -227,36 +296,43 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
 
           <div>
             <Label>Procedimentos *</Label>
-            <div className="border rounded-lg p-4 max-h-48 overflow-y-auto">
-              <div className="grid grid-cols-1 gap-3">
-                {procedures?.map((procedure) => (
-                  <div key={procedure.id} className="flex items-center justify-between p-2 border rounded">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id={procedure.id}
-                        checked={selectedProcedures.includes(procedure.id)}
-                        onCheckedChange={(checked) => handleProcedureToggle(procedure.id, checked as boolean)}
-                      />
-                      <div>
-                        <label htmlFor={procedure.id} className="text-sm font-medium cursor-pointer">
-                          {procedure.name}
-                        </label>
-                        {procedure.description && (
-                          <p className="text-xs text-gray-500">{procedure.description}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="flex items-center gap-1 text-green-600 font-medium">
-                        <DollarSign className="h-3 w-3" />
-                        {formatCurrency(procedure.price)}
-                      </div>
-                      <div className="text-xs text-gray-500">{procedure.duration}min</div>
-                    </div>
-                  </div>
-                ))}
+            {loadingProcedures ? (
+              <div className="flex items-center justify-center p-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <span className="ml-2">Carregando procedimentos...</span>
               </div>
-            </div>
+            ) : (
+              <div className="border rounded-lg p-4 max-h-48 overflow-y-auto">
+                <div className="grid grid-cols-1 gap-3">
+                  {procedures?.map((procedure) => (
+                    <div key={procedure.id} className="flex items-center justify-between p-2 border rounded">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id={procedure.id}
+                          checked={selectedProcedures.includes(procedure.id)}
+                          onCheckedChange={(checked) => handleProcedureToggle(procedure.id, checked as boolean)}
+                        />
+                        <div>
+                          <label htmlFor={procedure.id} className="text-sm font-medium cursor-pointer">
+                            {procedure.name}
+                          </label>
+                          {procedure.description && (
+                            <p className="text-xs text-gray-500">{procedure.description}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="flex items-center gap-1 text-green-600 font-medium">
+                          <DollarSign className="h-3 w-3" />
+                          {formatCurrency(Number(procedure.price))}
+                        </div>
+                        <div className="text-xs text-gray-500">{procedure.duration}min</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {selectedProcedures.length > 0 && (
               <div className="mt-2 p-3 bg-blue-50 rounded-lg">
                 <div className="flex justify-between items-center">
@@ -302,7 +378,7 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
             </Button>
             <Button 
               type="submit" 
-              disabled={createAppointment.isPending || updateAppointment.isPending}
+              disabled={createAppointment.isPending || updateAppointment.isPending || loadingProcedures}
             >
               {appointment ? 'Atualizar' : 'Criar'} Agendamento
             </Button>
