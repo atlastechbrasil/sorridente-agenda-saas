@@ -37,17 +37,68 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     let mounted = true;
 
-    const getInitialSession = async () => {
+    // Função para carregar perfil do usuário
+    const loadUserProfile = async (authUser: User) => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (mounted && session?.user) {
-          await loadUserProfile(session.user);
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authUser.id)
+          .single();
+
+        if (error) {
+          console.error('Error loading profile:', error);
+          return;
+        }
+
+        if (profile && mounted) {
+          setUser({
+            id: profile.id,
+            name: profile.full_name || profile.email,
+            email: profile.email,
+            role: profile.role as 'admin' | 'dentist' | 'assistant'
+          });
         }
       } catch (error) {
-        console.error('Erro ao buscar sessão inicial:', error);
-        if (mounted) {
+        console.error('Error loading profile:', error);
+      }
+    };
+
+    // Configurar listener de mudanças de auth PRIMEIRO
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      
+      console.log('Auth state change:', event, session?.user?.id);
+      
+      if (session?.user) {
+        await loadUserProfile(session.user);
+      } else {
+        setUser(null);
+      }
+      
+      setIsLoading(false);
+    });
+
+    // Verificar sessão inicial DEPOIS
+    const getInitialSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          if (mounted) {
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        if (session?.user && mounted) {
+          await loadUserProfile(session.user);
+        } else if (mounted) {
           setUser(null);
         }
+      } catch (error) {
+        console.error('Error in getInitialSession:', error);
       } finally {
         if (mounted) {
           setIsLoading(false);
@@ -57,58 +108,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     getInitialSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-      
-      try {
-        if (session?.user) {
-          await loadUserProfile(session.user);
-        } else {
-          setUser(null);
-        }
-      } catch (error) {
-        console.error('Erro no onAuthStateChange:', error);
-        if (mounted) {
-          setUser(null);
-        }
-      } finally {
-        if (mounted) {
-          setIsLoading(false);
-        }
-      }
-    });
-
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
   }, []);
-
-  const loadUserProfile = async (authUser: User) => {
-    try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
-
-      if (error) {
-        console.error('Error loading profile:', error);
-        return;
-      }
-
-      if (profile) {
-        setUser({
-          id: profile.id,
-          name: profile.full_name || profile.email,
-          email: profile.email,
-          role: profile.role as 'admin' | 'dentist' | 'assistant'
-        });
-      }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-    }
-  };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
@@ -122,10 +126,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return false;
       }
 
-      if (data.user) {
-        await loadUserProfile(data.user);
-      }
-      
       return true;
     } catch (error) {
       console.error('Login error:', error);

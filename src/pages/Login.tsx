@@ -17,8 +17,9 @@ const Login = () => {
   const { login, resetPassword, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
+  // Se já estiver autenticado, redirecionar para home
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,7 +53,7 @@ const Login = () => {
     
     if (success) {
       toast.success('Login realizado com sucesso!');
-      navigate('/dashboard');
+      navigate('/');
     } else {
       toast.error('Email ou senha incorretos');
     }
