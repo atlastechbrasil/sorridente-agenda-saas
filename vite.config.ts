@@ -12,8 +12,8 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
-    mode === 'development' &&
-    componentTagger(),
+    //mode === 'development' &&
+    (mode === 'development' && !process.env.LOVABLE_PREVIEW) && componentTagger(),
   ].filter(Boolean),
   resolve: {
     alias: {
