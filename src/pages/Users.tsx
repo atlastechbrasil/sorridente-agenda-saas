@@ -9,7 +9,6 @@ import { Trash2, Edit, Plus, Users as UsersIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { usePermissions } from '@/hooks/usePermissions';
 import { UserModal } from '@/components/Users/UserModal';
-import ProtectedRoute from '@/components/ProtectedRoute';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -69,7 +68,7 @@ const Users = () => {
 
       const formattedUsers: User[] = profiles.map(profile => ({
         id: profile.id,
-        name: profile.full_name,
+        name: profile.full_name || profile.email,
         email: profile.email,
         role: profile.role as 'admin' | 'dentist' | 'assistant',
         createdAt: new Date(profile.created_at || '').toISOString().split('T')[0]
@@ -86,26 +85,24 @@ const Users = () => {
 
   if (!hasPermission('manage_users')) {
     return (
-      <ProtectedRoute>
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-          <Header onMenuClick={toggleSidebar} />
-          <div className="flex">
-            <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
-            <main className="flex-1 p-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Acesso Negado</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-300">
-                    Você não tem permissão para gerenciar usuários.
-                  </p>
-                </CardContent>
-              </Card>
-            </main>
-          </div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <Header onMenuClick={toggleSidebar} />
+        <div className="flex">
+          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+          <main className="flex-1 p-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Acesso Negado</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600 dark:text-gray-300">
+                  Você não tem permissão para gerenciar usuários.
+                </p>
+              </CardContent>
+            </Card>
+          </main>
         </div>
-      </ProtectedRoute>
+      </div>
     );
   }
 
@@ -114,7 +111,6 @@ const Users = () => {
       try {
         console.log('Deleting user:', id);
         
-        // First delete from user_roles
         const { error: roleError } = await supabase
           .from('user_roles')
           .delete()
@@ -124,7 +120,6 @@ const Users = () => {
           console.error('Error deleting user role:', roleError);
         }
 
-        // Then delete from profiles
         const { error: profileError } = await supabase
           .from('profiles')
           .delete()
@@ -181,7 +176,6 @@ const Users = () => {
           return;
         }
 
-        // Update user role
         const { error: roleError } = await supabase
           .from('user_roles')
           .upsert({ 
@@ -195,7 +189,7 @@ const Users = () => {
 
         toast.success('Usuário atualizado com sucesso!');
       } else {
-        // Create new user
+        // Create new user - Use Edge Function for proper user creation
         if (!userData.password || userData.password.length < 6) {
           toast.error('Senha deve ter pelo menos 6 caracteres');
           return;
@@ -203,32 +197,23 @@ const Users = () => {
 
         console.log('Creating new user with email:', userData.email);
 
-        // Get current user session to make admin request
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session) {
-          toast.error('Sessão expirada. Faça login novamente.');
-          return;
-        }
-
-        // Use Supabase Admin API to create user
-        const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
-          email: userData.email,
-          password: userData.password,
-          user_metadata: {
+        // Call Edge Function to create user with admin privileges
+        const { data, error } = await supabase.functions.invoke('create-user', {
+          body: {
+            email: userData.email,
+            password: userData.password,
             full_name: userData.name,
             role: userData.role
-          },
-          email_confirm: true // Skip email confirmation
+          }
         });
 
-        if (createError) {
-          console.error('Error creating user:', createError);
-          toast.error('Erro ao criar usuário: ' + createError.message);
+        if (error) {
+          console.error('Error creating user:', error);
+          toast.error('Erro ao criar usuário: ' + error.message);
           return;
         }
 
-        console.log('User created successfully:', newUser);
+        console.log('User created successfully:', data);
         toast.success('Usuário criado com sucesso!');
       }
 
@@ -242,108 +227,104 @@ const Users = () => {
 
   if (loading) {
     return (
-      <ProtectedRoute>
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-            <p className="text-gray-600 dark:text-gray-300">Carregando usuários...</p>
-          </div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+          <p className="text-gray-600 dark:text-gray-300">Carregando usuários...</p>
         </div>
-      </ProtectedRoute>
+      </div>
     );
   }
 
   return (
-    <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <Header onMenuClick={toggleSidebar} />
-        <div className="flex">
-          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
-          <main className="flex-1 p-6">
-            <div className="max-w-7xl mx-auto">
-              <div className="mb-6">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Usuários</h1>
-                <p className="text-gray-600 dark:text-gray-300 mt-2">Gerencie os usuários do sistema</p>
-              </div>
-              
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <UsersIcon className="h-5 w-5" />
-                      Lista de Usuários
-                    </CardTitle>
-                    <Button onClick={handleCreate}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Novo Usuário
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nome</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Função</TableHead>
-                        <TableHead>Data de Criação</TableHead>
-                        <TableHead>Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {users.map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell className="font-medium">{user.name}</TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell>
-                            <Badge className={roleColors[user.role]}>
-                              {roleLabels[user.role]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {new Date(user.createdAt).toLocaleDateString('pt-BR')}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => handleEdit(user)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => handleDelete(user.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  {users.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                      Nenhum usuário encontrado
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <UserModal
-                isOpen={isModalOpen}
-                onClose={handleCloseModal}
-                onSave={handleSave}
-                user={selectedUser}
-              />
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <Header onMenuClick={toggleSidebar} />
+      <div className="flex">
+        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+        <main className="flex-1 p-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="mb-6">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Usuários</h1>
+              <p className="text-gray-600 dark:text-gray-300 mt-2">Gerencie os usuários do sistema</p>
             </div>
-          </main>
-        </div>
+            
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <UsersIcon className="h-5 w-5" />
+                    Lista de Usuários
+                  </CardTitle>
+                  <Button onClick={handleCreate}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Novo Usuário
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Função</TableHead>
+                      <TableHead>Data de Criação</TableHead>
+                      <TableHead>Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell className="font-medium">{user.name}</TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                          <Badge className={roleColors[user.role]}>
+                            {roleLabels[user.role]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(user.createdAt).toLocaleDateString('pt-BR')}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleEdit(user)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleDelete(user.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {users.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    Nenhum usuário encontrado
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <UserModal
+              isOpen={isModalOpen}
+              onClose={handleCloseModal}
+              onSave={handleSave}
+              user={selectedUser}
+            />
+          </div>
+        </main>
       </div>
-    </ProtectedRoute>
+    </div>
   );
 };
 

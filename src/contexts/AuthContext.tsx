@@ -35,52 +35,72 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-  const getInitialSession = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await loadUserProfile(session.user);
+    let mounted = true;
+
+    const getInitialSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (mounted && session?.user) {
+          await loadUserProfile(session.user);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar sessão inicial:', error);
+        if (mounted) {
+          setUser(null);
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
-    } catch (error) {
-      // Logue o erro para debug
-      console.error('Erro ao buscar sessão inicial:', error);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
 
-  getInitialSession();
+    getInitialSession();
 
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-    try {
-      if (session?.user) {
-        await loadUserProfile(session.user);
-      } else {
-        setUser(null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      
+      try {
+        if (session?.user) {
+          await loadUserProfile(session.user);
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('Erro no onAuthStateChange:', error);
+        if (mounted) {
+          setUser(null);
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
-    } catch (error) {
-      console.error('Erro no onAuthStateChange:', error);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
-  });
+    });
 
-  return () => subscription.unsubscribe();
-}, []);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   const loadUserProfile = async (authUser: User) => {
     try {
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', authUser.id)
         .single();
 
+      if (error) {
+        console.error('Error loading profile:', error);
+        return;
+      }
+
       if (profile) {
         setUser({
           id: profile.id,
-          name: profile.full_name,
+          name: profile.full_name || profile.email,
           email: profile.email,
           role: profile.role as 'admin' | 'dentist' | 'assistant'
         });
@@ -91,8 +111,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    setIsLoading(true);
-    
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -101,7 +119,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       if (error) {
         console.error('Login error:', error);
-        setIsLoading(false);
         return false;
       }
 
@@ -109,11 +126,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await loadUserProfile(data.user);
       }
       
-      setIsLoading(false);
       return true;
     } catch (error) {
       console.error('Login error:', error);
-      setIsLoading(false);
       return false;
     }
   };
@@ -141,7 +156,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const changePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
     try {
-      // First, re-authenticate the user with current password
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       
       if (!currentUser) {
@@ -149,7 +163,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return false;
       }
 
-      // Re-authenticate with current password
       const { error: reauthError } = await supabase.auth.signInWithPassword({
         email: currentUser.email!,
         password: currentPassword,
@@ -160,7 +173,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return false;
       }
 
-      // Now update the password
       const { error } = await supabase.auth.updateUser({
         password: newPassword
       });
