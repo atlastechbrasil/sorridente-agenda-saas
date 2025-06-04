@@ -53,62 +53,27 @@ const Users = () => {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      console.log('Loading all users...');
+      console.log('Loading users from profiles...');
       
-      // Get all auth users first using the service role via edge function or RPC
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-      
-      if (authError) {
-        console.error('Error loading auth users:', authError);
-        // Fallback to profiles only
-        const { data: profiles, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false });
-          
-        if (profileError) {
-          console.error('Error loading profiles:', profileError);
-          toast.error('Erro ao carregar usuários');
-          return;
-        }
-
-        const formattedUsers: User[] = profiles.map(profile => ({
-          id: profile.id,
-          name: profile.full_name || profile.email,
-          email: profile.email,
-          role: profile.role as 'admin' | 'dentist' | 'assistant',
-          createdAt: new Date(profile.created_at || '').toISOString().split('T')[0]
-        }));
-
-        setUsers(formattedUsers);
-        return;
-      }
-
-      // Get corresponding profiles for each auth user
-      const userIds = authUsers.users.map(user => user.id);
+      // Load only from profiles table to avoid auth.admin issues
       const { data: profiles, error: profileError } = await supabase
         .from('profiles')
         .select('*')
-        .in('id', userIds)
         .order('created_at', { ascending: false });
-
+          
       if (profileError) {
         console.error('Error loading profiles:', profileError);
-        toast.error('Erro ao carregar perfis dos usuários');
+        toast.error('Erro ao carregar usuários');
         return;
       }
 
-      // Combine auth users with profiles
-      const formattedUsers: User[] = authUsers.users.map(authUser => {
-        const profile = profiles.find(p => p.id === authUser.id);
-        return {
-          id: authUser.id,
-          name: profile?.full_name || authUser.email || 'Usuário sem nome',
-          email: authUser.email || profile?.email || 'Email não encontrado',
-          role: (profile?.role as 'admin' | 'dentist' | 'assistant') || 'dentist',
-          createdAt: new Date(authUser.created_at).toISOString().split('T')[0]
-        };
-      });
+      const formattedUsers: User[] = profiles.map(profile => ({
+        id: profile.id,
+        name: profile.full_name || profile.email,
+        email: profile.email,
+        role: profile.role as 'admin' | 'dentist' | 'assistant',
+        createdAt: new Date(profile.created_at || '').toISOString().split('T')[0]
+      }));
 
       console.log('Loaded users:', formattedUsers.length);
       setUsers(formattedUsers);
@@ -168,16 +133,6 @@ const Users = () => {
           console.error('Error deleting profile:', profileError);
           toast.error('Erro ao excluir perfil do usuário');
           return;
-        }
-
-        // Try to delete auth user (may not work with RLS)
-        try {
-          const { error: authError } = await supabase.auth.admin.deleteUser(id);
-          if (authError) {
-            console.warn('Could not delete auth user:', authError);
-          }
-        } catch (authDeleteError) {
-          console.warn('Auth user deletion failed:', authDeleteError);
         }
 
         toast.success('Usuário excluído com sucesso!');

@@ -96,6 +96,8 @@ export const AppointmentModal = ({ isOpen, onClose, appointment }: AppointmentMo
   useEffect(() => {
     if (isOpen) {
       if (appointment) {
+        console.log('Loading appointment data:', appointment);
+        
         const formData = {
           patient_id: appointment.patient_id,
           dentist_id: appointment.dentist_id,
