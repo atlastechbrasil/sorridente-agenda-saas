@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
 import { Button } from '@/components/ui/button';
@@ -38,24 +38,20 @@ const Users = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const { hasPermission } = usePermissions();
 
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed);
   };
 
-  useEffect(() => {
-    if (hasPermission('manage_users')) {
-      loadUsers();
-    }
-  }, [hasPermission]);
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
+    if (isLoadingUsers) return; // Prevent multiple concurrent loads
+    
     try {
-      setLoading(true);
+      setIsLoadingUsers(true);
       console.log('Loading users from profiles...');
       
-      // Load only from profiles table to avoid auth.admin issues
       const { data: profiles, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -67,13 +63,13 @@ const Users = () => {
         return;
       }
 
-      const formattedUsers: User[] = profiles.map(profile => ({
+      const formattedUsers: User[] = profiles?.map(profile => ({
         id: profile.id,
         name: profile.full_name || profile.email,
         email: profile.email,
         role: profile.role as 'admin' | 'dentist' | 'assistant',
         createdAt: new Date(profile.created_at || '').toISOString().split('T')[0]
-      }));
+      })) || [];
 
       console.log('Loaded users:', formattedUsers.length);
       setUsers(formattedUsers);
@@ -81,9 +77,18 @@ const Users = () => {
       console.error('Error loading users:', error);
       toast.error('Erro ao carregar usuários');
     } finally {
+      setIsLoadingUsers(false);
       setLoading(false);
     }
-  };
+  }, [isLoadingUsers]);
+
+  useEffect(() => {
+    if (hasPermission('manage_users') && !isLoadingUsers) {
+      loadUsers();
+    } else if (!hasPermission('manage_users')) {
+      setLoading(false);
+    }
+  }, [hasPermission, loadUsers]);
 
   if (!hasPermission('manage_users')) {
     return (
@@ -266,52 +271,59 @@ const Users = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Função</TableHead>
-                      <TableHead>Data de Criação</TableHead>
-                      <TableHead>Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {users.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.name}</TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>
-                          <Badge className={roleColors[user.role]}>
-                            {roleLabels[user.role]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {new Date(user.createdAt).toLocaleDateString('pt-BR')}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleEdit(user)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleDelete(user.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+                {isLoadingUsers ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p className="text-gray-500">Carregando usuários...</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Função</TableHead>
+                        <TableHead>Data de Criação</TableHead>
+                        <TableHead>Ações</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                {users.length === 0 && (
+                    </TableHeader>
+                    <TableBody>
+                      {users.map((user) => (
+                        <TableRow key={user.id}>
+                          <TableCell className="font-medium">{user.name}</TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>
+                            <Badge className={roleColors[user.role]}>
+                              {roleLabels[user.role]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {new Date(user.createdAt).toLocaleDateString('pt-BR')}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleEdit(user)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleDelete(user.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+                {users.length === 0 && !isLoadingUsers && (
                   <div className="text-center py-8 text-gray-500">
                     Nenhum usuário encontrado
                   </div>

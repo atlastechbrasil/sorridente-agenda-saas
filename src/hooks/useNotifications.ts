@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,12 +17,19 @@ export const useNotifications = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const subscriptionRef = useRef<any>(null);
+  const isSubscribedRef = useRef(false);
 
   useEffect(() => {
-    if (user) {
+    if (user && !isSubscribedRef.current) {
       loadNotifications();
       subscribeToNotifications();
-    } else {
+    } else if (!user) {
+      // Cleanup when user logs out
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current);
+        subscriptionRef.current = null;
+        isSubscribedRef.current = false;
+      }
       setNotifications([]);
       setLoading(false);
     }
@@ -34,9 +40,10 @@ export const useNotifications = () => {
         console.log('Unsubscribing from notifications channel');
         supabase.removeChannel(subscriptionRef.current);
         subscriptionRef.current = null;
+        isSubscribedRef.current = false;
       }
     };
-  }, [user?.id]); // Only depend on user.id to prevent unnecessary re-subscriptions
+  }, [user?.id]);
 
   const loadNotifications = async () => {
     if (!user) return;
@@ -72,12 +79,13 @@ export const useNotifications = () => {
   };
 
   const subscribeToNotifications = () => {
-    if (!user || subscriptionRef.current) return;
+    if (!user || subscriptionRef.current || isSubscribedRef.current) return;
 
     console.log('Subscribing to notifications for user:', user.id);
+    isSubscribedRef.current = true;
 
     const channel = supabase
-      .channel(`notifications_${user.id}`) // Use unique channel name per user
+      .channel(`notifications_${user.id}_${Date.now()}`) // Use unique channel name with timestamp
       .on(
         'postgres_changes',
         {
@@ -110,6 +118,9 @@ export const useNotifications = () => {
     // Subscribe and store the subscription reference
     channel.subscribe((status) => {
       console.log('Notifications subscription status:', status);
+      if (status === 'CLOSED') {
+        isSubscribedRef.current = false;
+      }
     });
     
     subscriptionRef.current = channel;
