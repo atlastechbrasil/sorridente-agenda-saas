@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,6 +17,7 @@ export const useNotifications = () => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const subscriptionRef = useRef<any>(null);
 
   useEffect(() => {
     if (user) {
@@ -25,7 +27,16 @@ export const useNotifications = () => {
       setNotifications([]);
       setLoading(false);
     }
-  }, [user]);
+
+    // Cleanup function
+    return () => {
+      if (subscriptionRef.current) {
+        console.log('Unsubscribing from notifications channel');
+        supabase.removeChannel(subscriptionRef.current);
+        subscriptionRef.current = null;
+      }
+    };
+  }, [user?.id]); // Only depend on user.id to prevent unnecessary re-subscriptions
 
   const loadNotifications = async () => {
     if (!user) return;
@@ -61,10 +72,12 @@ export const useNotifications = () => {
   };
 
   const subscribeToNotifications = () => {
-    if (!user) return;
+    if (!user || subscriptionRef.current) return;
 
-    const subscription = supabase
-      .channel('notifications')
+    console.log('Subscribing to notifications for user:', user.id);
+
+    const channel = supabase
+      .channel(`notifications_${user.id}`) // Use unique channel name per user
       .on(
         'postgres_changes',
         {
@@ -74,6 +87,7 @@ export const useNotifications = () => {
           filter: `user_id=eq.${user.id}`
         },
         (payload) => {
+          console.log('New notification received:', payload);
           const newNotification = payload.new as Notification;
           setNotifications(prev => [newNotification, ...prev]);
           
@@ -91,12 +105,14 @@ export const useNotifications = () => {
               toast.info(newNotification.title, { description: newNotification.message });
           }
         }
-      )
-      .subscribe();
+      );
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    // Subscribe and store the subscription reference
+    channel.subscribe((status) => {
+      console.log('Notifications subscription status:', status);
+    });
+    
+    subscriptionRef.current = channel;
   };
 
   const addNotification = async (notification: Omit<Notification, 'id' | 'created_at' | 'read'>) => {
