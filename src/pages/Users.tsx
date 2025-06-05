@@ -1,14 +1,14 @@
-
 import { useState, useEffect } from 'react';
 import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Trash2, Edit, Plus, Users as UsersIcon } from 'lucide-react';
+import { Trash2, Edit, Plus, Users as UsersIcon, Shield } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { usePermissions } from '@/hooks/usePermissions';
 import { UserModal } from '@/components/Users/UserModal';
+import { RolePermissionsModal } from '@/components/Users/RolePermissionsModal';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -36,9 +36,10 @@ const Users = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const { hasPermission } = usePermissions();
+  const { hasPermission, userRole } = usePermissions();
 
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed);
@@ -48,6 +49,7 @@ const Users = () => {
     try {
       console.log('Loading users from profiles...');
       
+      // Admins podem ver todos os usuários
       const { data: profiles, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -229,6 +231,14 @@ const Users = () => {
     }
   };
 
+  const handleOpenPermissionsModal = () => {
+    setIsPermissionsModalOpen(true);
+  };
+
+  const handleClosePermissionsModal = () => {
+    setIsPermissionsModalOpen(false);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -259,10 +269,18 @@ const Users = () => {
                     <UsersIcon className="h-5 w-5" />
                     Lista de Usuários ({users.length})
                   </CardTitle>
-                  <Button onClick={handleCreate}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Novo Usuário
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {userRole === 'admin' && (
+                      <Button variant="outline" onClick={handleOpenPermissionsModal}>
+                        <Shield className="h-4 w-4 mr-2" />
+                        Gerenciar Permissões
+                      </Button>
+                    )}
+                    <Button onClick={handleCreate}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Novo Usuário
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -324,6 +342,11 @@ const Users = () => {
               onClose={handleCloseModal}
               onSave={handleSave}
               user={selectedUser}
+            />
+
+            <RolePermissionsModal
+              isOpen={isPermissionsModalOpen}
+              onClose={handleClosePermissionsModal}
             />
           </div>
         </main>

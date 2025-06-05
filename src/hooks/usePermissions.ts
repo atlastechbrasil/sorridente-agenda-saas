@@ -13,71 +13,90 @@ export type Permission =
   | 'manage_procedures'
   | 'manage_users';
 
-const rolePermissions: Record<string, Permission[]> = {
-  admin: [
-    'view_dashboard',
-    'manage_appointments',
-    'manage_patients',
-    'manage_dentists',
-    'view_reports',
-    'manage_settings',
-    'manage_procedures',
-    'manage_users'
-  ],
-  dentist: [
-    'view_dashboard',
-    'manage_appointments',
-    'manage_patients',
-    'view_reports'
-  ],
-  assistant: [
-    'view_dashboard',
-    'manage_appointments',
-    'manage_patients'
-  ]
-};
-
 export const usePermissions = () => {
   const { user } = useAuth();
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [userRoles, setUserRoles] = useState<string[]>([]);
 
   useEffect(() => {
-    const loadUserRoles = async () => {
+    const loadUserPermissions = async () => {
       if (!user) {
+        setUserPermissions([]);
         setUserRoles([]);
         return;
       }
 
       try {
-        const { data: roles } = await supabase
+        // Carregar permissões baseadas no role do profile
+        const { data: rolePermissions } = await supabase
+          .from('role_permissions')
+          .select(`
+            permission_id,
+            permissions:permission_id (
+              name
+            )
+          `)
+          .eq('role', user.role);
+
+        if (rolePermissions) {
+          const permissions = rolePermissions
+            .map(rp => rp.permissions?.name)
+            .filter(Boolean);
+          setUserPermissions(permissions);
+        }
+
+        // Carregar roles adicionais do usuário
+        const { data: additionalRoles } = await supabase
           .from('user_roles')
           .select('role')
           .eq('user_id', user.id);
 
-        if (roles) {
-          setUserRoles(roles.map(r => r.role));
+        if (additionalRoles) {
+          setUserRoles(additionalRoles.map(r => r.role));
         }
       } catch (error) {
-        console.error('Error loading user roles:', error);
+        console.error('Error loading user permissions:', error);
       }
     };
 
-    loadUserRoles();
+    loadUserPermissions();
   }, [user]);
 
   const hasPermission = (permission: Permission): boolean => {
     if (!user) return false;
     
-    // Check primary role from profile
-    const primaryRolePermissions = rolePermissions[user.role] || [];
-    if (primaryRolePermissions.includes(permission)) {
+    // Verificar permissões do role principal
+    if (userPermissions.includes(permission)) {
       return true;
     }
 
-    // Check additional roles
-    return userRoles.some(role => 
-      rolePermissions[role]?.includes(permission)
-    );
+    // Para compatibilidade, manter a lógica anterior se não encontrar nas novas tabelas
+    const rolePermissions: Record<string, Permission[]> = {
+      admin: [
+        'view_dashboard',
+        'manage_appointments',
+        'manage_patients',
+        'manage_dentists',
+        'view_reports',
+        'manage_settings',
+        'manage_procedures',
+        'manage_users'
+      ],
+      dentist: [
+        'view_dashboard',
+        'manage_appointments',
+        'manage_patients',
+        'view_reports'
+      ],
+      assistant: [
+        'view_dashboard',
+        'manage_appointments',
+        'manage_patients'
+      ]
+    };
+
+    const primaryRolePermissions = rolePermissions[user.role] || [];
+    return primaryRolePermissions.includes(permission);
   };
 
   const hasAnyPermission = (permissions: Permission[]): boolean => {
@@ -93,6 +112,7 @@ export const usePermissions = () => {
     hasAnyPermission,
     hasAllPermissions,
     userRole: user?.role,
-    userRoles
+    userRoles,
+    userPermissions
   };
 };
