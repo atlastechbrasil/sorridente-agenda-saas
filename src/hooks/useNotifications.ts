@@ -13,49 +13,73 @@ export interface Notification {
   read: boolean;
 }
 
+// Global subscription tracker to prevent multiple subscriptions across all hook instances
+const globalSubscriptionTracker = {
+  isSubscribed: false,
+  currentUserId: null as string | null,
+  channelRef: null as any,
+};
+
 export const useNotifications = () => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
-  const subscriptionRef = useRef<any>(null);
-  const isSubscribedRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) {
       // Cleanup when user logs out
-      if (subscriptionRef.current) {
+      if (globalSubscriptionTracker.channelRef && globalSubscriptionTracker.currentUserId) {
         console.log('Cleaning up notifications subscription - user logged out');
-        supabase.removeChannel(subscriptionRef.current);
-        subscriptionRef.current = null;
-        isSubscribedRef.current = false;
+        supabase.removeChannel(globalSubscriptionTracker.channelRef);
+        globalSubscriptionTracker.channelRef = null;
+        globalSubscriptionTracker.isSubscribed = false;
+        globalSubscriptionTracker.currentUserId = null;
       }
       setNotifications([]);
       setLoading(false);
       return;
     }
 
-    // Only proceed if we don't already have an active subscription
-    if (subscriptionRef.current || isSubscribedRef.current) {
-      console.log('Notifications subscription already active');
-      return;
+    // If user changed, cleanup old subscription
+    if (globalSubscriptionTracker.currentUserId && globalSubscriptionTracker.currentUserId !== user.id) {
+      if (globalSubscriptionTracker.channelRef) {
+        console.log('Cleaning up notifications subscription - user changed');
+        supabase.removeChannel(globalSubscriptionTracker.channelRef);
+        globalSubscriptionTracker.channelRef = null;
+        globalSubscriptionTracker.isSubscribed = false;
+      }
     }
 
     loadNotifications();
-    subscribeToNotifications();
+    
+    // Only subscribe if not already subscribed for this user
+    if (!globalSubscriptionTracker.isSubscribed || globalSubscriptionTracker.currentUserId !== user.id) {
+      subscribeToNotifications();
+    }
 
     // Cleanup function
     return () => {
-      if (subscriptionRef.current) {
+      // Only cleanup if this component is unmounting and we're the ones who created the subscription
+      if (!mountedRef.current && globalSubscriptionTracker.channelRef && globalSubscriptionTracker.currentUserId === user?.id) {
         console.log('Cleaning up notifications subscription - component unmount');
-        supabase.removeChannel(subscriptionRef.current);
-        subscriptionRef.current = null;
-        isSubscribedRef.current = false;
+        supabase.removeChannel(globalSubscriptionTracker.channelRef);
+        globalSubscriptionTracker.channelRef = null;
+        globalSubscriptionTracker.isSubscribed = false;
+        globalSubscriptionTracker.currentUserId = null;
       }
     };
   }, [user?.id]);
 
   const loadNotifications = async () => {
-    if (!user) return;
+    if (!user || !mountedRef.current) return;
 
     try {
       const { data, error } = await supabase
@@ -70,6 +94,8 @@ export const useNotifications = () => {
         return;
       }
 
+      if (!mountedRef.current) return;
+
       const formattedNotifications: Notification[] = data?.map(notification => ({
         id: notification.id,
         title: notification.title,
@@ -83,21 +109,25 @@ export const useNotifications = () => {
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   const subscribeToNotifications = () => {
-    if (!user || subscriptionRef.current || isSubscribedRef.current) {
+    if (!user || globalSubscriptionTracker.isSubscribed) {
       console.log('Skipping subscription - no user or already subscribed');
       return;
     }
 
     console.log('Subscribing to notifications for user:', user.id);
-    isSubscribedRef.current = true;
+    globalSubscriptionTracker.isSubscribed = true;
+    globalSubscriptionTracker.currentUserId = user.id;
 
+    const channelName = `notifications_${user.id}_${Date.now()}_${Math.random()}`;
     const channel = supabase
-      .channel(`notifications_${user.id}_${Date.now()}_${Math.random()}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -108,6 +138,8 @@ export const useNotifications = () => {
         },
         (payload) => {
           console.log('New notification received:', payload);
+          if (!mountedRef.current) return;
+          
           const newNotification = payload.new as Notification;
           setNotifications(prev => [newNotification, ...prev]);
           
@@ -129,12 +161,13 @@ export const useNotifications = () => {
       .subscribe((status) => {
         console.log('Notifications subscription status:', status);
         if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          subscriptionRef.current = null;
-          isSubscribedRef.current = false;
+          globalSubscriptionTracker.channelRef = null;
+          globalSubscriptionTracker.isSubscribed = false;
+          globalSubscriptionTracker.currentUserId = null;
         }
       });
     
-    subscriptionRef.current = channel;
+    globalSubscriptionTracker.channelRef = channel;
   };
 
   const addNotification = async (notification: Omit<Notification, 'id' | 'created_at' | 'read'>) => {
@@ -170,11 +203,13 @@ export const useNotifications = () => {
         return;
       }
 
-      setNotifications(prev =>
-        prev.map(notification =>
-          notification.id === id ? { ...notification, read: true } : notification
-        )
-      );
+      if (mountedRef.current) {
+        setNotifications(prev =>
+          prev.map(notification =>
+            notification.id === id ? { ...notification, read: true } : notification
+          )
+        );
+      }
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
@@ -194,9 +229,11 @@ export const useNotifications = () => {
         return;
       }
 
-      setNotifications(prev =>
-        prev.map(notification => ({ ...notification, read: true }))
-      );
+      if (mountedRef.current) {
+        setNotifications(prev =>
+          prev.map(notification => ({ ...notification, read: true }))
+        );
+      }
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
@@ -214,7 +251,9 @@ export const useNotifications = () => {
         return;
       }
 
-      setNotifications(prev => prev.filter(notification => notification.id !== id));
+      if (mountedRef.current) {
+        setNotifications(prev => prev.filter(notification => notification.id !== id));
+      }
     } catch (error) {
       console.error('Error removing notification:', error);
     }
