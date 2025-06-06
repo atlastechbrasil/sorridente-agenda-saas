@@ -1,38 +1,14 @@
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotifications } from './useNotifications';
 import { toast } from 'sonner';
 
 export const useAppointmentNotifications = () => {
   const { addNotification } = useNotifications();
-  const channelRef = useRef<any>(null);
-  const isSubscribedRef = useRef(false);
 
   useEffect(() => {
-    if (!isSubscribedRef.current) {
-      setupAppointmentNotifications();
-    }
-
-    return cleanup;
-  }, [addNotification]);
-
-  const cleanup = () => {
-    if (channelRef.current) {
-      console.log('Cleaning up appointment notifications...');
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
-    }
-    isSubscribedRef.current = false;
-  };
-
-  const setupAppointmentNotifications = () => {
-    if (channelRef.current || isSubscribedRef.current) {
-      return;
-    }
-
     console.log('Setting up appointment notifications...');
-    isSubscribedRef.current = true;
 
     const channel = supabase
       .channel('appointment_changes')
@@ -90,12 +66,11 @@ export const useAppointmentNotifications = () => {
       )
       .subscribe((status) => {
         console.log('Appointment notifications subscription status:', status);
-        if (status === 'CLOSED') {
-          isSubscribedRef.current = false;
-          channelRef.current = null;
-        }
       });
 
-    channelRef.current = channel;
-  };
+    return () => {
+      console.log('Cleaning up appointment notifications...');
+      supabase.removeChannel(channel);
+    };
+  }, [addNotification]);
 };
