@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,72 +16,34 @@ export const useNotifications = () => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
-  const channelRef = useRef<any>(null);
+  const subscriptionRef = useRef<any>(null);
+  const isSubscribedRef = useRef(false);
 
   useEffect(() => {
-    if (!user) {
+    if (user && !isSubscribedRef.current) {
+      loadNotifications();
+      subscribeToNotifications();
+    } else if (!user) {
+      // Cleanup when user logs out
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current);
+        subscriptionRef.current = null;
+        isSubscribedRef.current = false;
+      }
       setNotifications([]);
       setLoading(false);
-      
-      // Clean up channel if user logged out
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-      return;
     }
 
-    loadNotifications();
-    setupRealtimeSubscription();
-
+    // Cleanup function
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
+      if (subscriptionRef.current) {
+        console.log('Unsubscribing from notifications channel');
+        supabase.removeChannel(subscriptionRef.current);
+        subscriptionRef.current = null;
+        isSubscribedRef.current = false;
       }
     };
   }, [user?.id]);
-
-  const setupRealtimeSubscription = () => {
-    if (!user || channelRef.current) return;
-
-    console.log('Setting up realtime subscription for user:', user.id);
-
-    channelRef.current = supabase
-      .channel(`notifications_${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`
-        },
-        (payload) => {
-          console.log('New notification received:', payload);
-          const newNotification = payload.new as Notification;
-          setNotifications(prev => [newNotification, ...prev]);
-          
-          // Show toast
-          switch (newNotification.type) {
-            case 'success':
-              toast.success(newNotification.title, { description: newNotification.message });
-              break;
-            case 'error':
-              toast.error(newNotification.title, { description: newNotification.message });
-              break;
-            case 'warning':
-              toast.warning(newNotification.title, { description: newNotification.message });
-              break;
-            default:
-              toast.info(newNotification.title, { description: newNotification.message });
-          }
-        }
-      )
-      .subscribe((status: string) => {
-        console.log('Channel subscription status:', status);
-      });
-  };
 
   const loadNotifications = async () => {
     if (!user) return;
@@ -115,6 +76,54 @@ export const useNotifications = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const subscribeToNotifications = () => {
+    if (!user || subscriptionRef.current || isSubscribedRef.current) return;
+
+    console.log('Subscribing to notifications for user:', user.id);
+    isSubscribedRef.current = true;
+
+    const channel = supabase
+      .channel(`notifications_${user.id}_${Date.now()}`) // Use unique channel name with timestamp
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('New notification received:', payload);
+          const newNotification = payload.new as Notification;
+          setNotifications(prev => [newNotification, ...prev]);
+          
+          switch (newNotification.type) {
+            case 'success':
+              toast.success(newNotification.title, { description: newNotification.message });
+              break;
+            case 'error':
+              toast.error(newNotification.title, { description: newNotification.message });
+              break;
+            case 'warning':
+              toast.warning(newNotification.title, { description: newNotification.message });
+              break;
+            default:
+              toast.info(newNotification.title, { description: newNotification.message });
+          }
+        }
+      );
+
+    // Subscribe and store the subscription reference
+    channel.subscribe((status) => {
+      console.log('Notifications subscription status:', status);
+      if (status === 'CLOSED') {
+        isSubscribedRef.current = false;
+      }
+    });
+    
+    subscriptionRef.current = channel;
   };
 
   const addNotification = async (notification: Omit<Notification, 'id' | 'created_at' | 'read'>) => {
