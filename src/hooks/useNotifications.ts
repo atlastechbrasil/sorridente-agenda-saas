@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,30 +18,35 @@ export const useNotifications = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const subscriptionRef = useRef<any>(null);
-  const isSubscribedRef = useRef(false);
 
   useEffect(() => {
-    if (user && !isSubscribedRef.current) {
-      loadNotifications();
-      subscribeToNotifications();
-    } else if (!user) {
+    if (!user) {
       // Cleanup when user logs out
       if (subscriptionRef.current) {
+        console.log('Cleaning up notifications subscription - user logged out');
         supabase.removeChannel(subscriptionRef.current);
         subscriptionRef.current = null;
-        isSubscribedRef.current = false;
       }
       setNotifications([]);
       setLoading(false);
+      return;
     }
+
+    // Only proceed if we don't already have an active subscription
+    if (subscriptionRef.current) {
+      console.log('Notifications subscription already active');
+      return;
+    }
+
+    loadNotifications();
+    subscribeToNotifications();
 
     // Cleanup function
     return () => {
       if (subscriptionRef.current) {
-        console.log('Unsubscribing from notifications channel');
+        console.log('Cleaning up notifications subscription - component unmount');
         supabase.removeChannel(subscriptionRef.current);
         subscriptionRef.current = null;
-        isSubscribedRef.current = false;
       }
     };
   }, [user?.id]);
@@ -79,13 +85,15 @@ export const useNotifications = () => {
   };
 
   const subscribeToNotifications = () => {
-    if (!user || subscriptionRef.current || isSubscribedRef.current) return;
+    if (!user || subscriptionRef.current) {
+      console.log('Skipping subscription - no user or already subscribed');
+      return;
+    }
 
     console.log('Subscribing to notifications for user:', user.id);
-    isSubscribedRef.current = true;
 
     const channel = supabase
-      .channel(`notifications_${user.id}_${Date.now()}`) // Use unique channel name with timestamp
+      .channel(`notifications_${user.id}_${Date.now()}`)
       .on(
         'postgres_changes',
         {
@@ -113,15 +121,13 @@ export const useNotifications = () => {
               toast.info(newNotification.title, { description: newNotification.message });
           }
         }
-      );
-
-    // Subscribe and store the subscription reference
-    channel.subscribe((status) => {
-      console.log('Notifications subscription status:', status);
-      if (status === 'CLOSED') {
-        isSubscribedRef.current = false;
-      }
-    });
+      )
+      .subscribe((status) => {
+        console.log('Notifications subscription status:', status);
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          subscriptionRef.current = null;
+        }
+      });
     
     subscriptionRef.current = channel;
   };
