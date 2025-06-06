@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { usePatients, useDeletePatient } from '@/hooks/usePatients';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,13 +8,68 @@ import { Trash2, Edit, Plus, Phone, Mail } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { PatientModal } from './PatientModal';
+import { TableFilters } from '@/components/ui/table-filters';
 
 export const PatientsList = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [sortColumn, setSortColumn] = useState<string>('');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   
   const { data: patients, isLoading, error } = usePatients();
   const deletePatient = useDeletePatient();
+
+  const filteredAndSortedPatients = useMemo(() => {
+    if (!patients) return [];
+
+    let filtered = patients.filter(patient => {
+      return Object.entries(filters).every(([key, value]) => {
+        if (!value) return true;
+        
+        switch (key) {
+          case 'name':
+            return patient.name.toLowerCase().includes(value.toLowerCase());
+          case 'email':
+            return patient.email?.toLowerCase().includes(value.toLowerCase());
+          case 'phone':
+            return patient.phone.includes(value);
+          case 'birth_date':
+            return patient.birth_date?.includes(value);
+          default:
+            return true;
+        }
+      });
+    });
+
+    if (sortColumn) {
+      filtered.sort((a, b) => {
+        let aValue = a[sortColumn as keyof typeof a];
+        let bValue = b[sortColumn as keyof typeof b];
+
+        if (!aValue) aValue = '';
+        if (!bValue) bValue = '';
+
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          const comparison = aValue.toLowerCase().localeCompare(bValue.toLowerCase());
+          return sortDirection === 'asc' ? comparison : -comparison;
+        }
+
+        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return filtered;
+  }, [patients, filters, sortColumn, sortDirection]);
+
+  const filterColumns = [
+    { key: 'name', label: 'Nome', type: 'text' as const },
+    { key: 'email', label: 'Email', type: 'text' as const },
+    { key: 'phone', label: 'Telefone', type: 'text' as const },
+    { key: 'birth_date', label: 'Data de Nascimento', type: 'date' as const }
+  ];
 
   const handleDelete = (id: string, name: string) => {
     if (confirm(`Tem certeza que deseja excluir o paciente ${name}?`)) {
@@ -59,7 +114,7 @@ export const PatientsList = () => {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Lista de Pacientes</CardTitle>
+            <CardTitle>Lista de Pacientes ({filteredAndSortedPatients.length})</CardTitle>
             <Button onClick={handleCreate}>
               <Plus className="h-4 w-4 mr-2" />
               Novo Paciente
@@ -67,6 +122,15 @@ export const PatientsList = () => {
           </div>
         </CardHeader>
         <CardContent>
+          <TableFilters
+            columns={filterColumns}
+            onFilter={setFilters}
+            onSort={(column, direction) => {
+              setSortColumn(column);
+              setSortDirection(direction);
+            }}
+          />
+          
           <Table>
             <TableHeader>
               <TableRow>
@@ -77,7 +141,7 @@ export const PatientsList = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {patients?.map((patient) => (
+              {filteredAndSortedPatients?.map((patient) => (
                 <TableRow key={patient.id}>
                   <TableCell className="font-medium">{patient.name}</TableCell>
                   <TableCell>
@@ -120,9 +184,12 @@ export const PatientsList = () => {
               ))}
             </TableBody>
           </Table>
-          {patients?.length === 0 && (
+          {filteredAndSortedPatients?.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
-              Nenhum paciente cadastrado
+              {Object.keys(filters).some(key => filters[key]) ? 
+                'Nenhum paciente encontrado com os filtros aplicados' : 
+                'Nenhum paciente cadastrado'
+              }
             </div>
           )}
         </CardContent>
