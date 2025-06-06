@@ -15,6 +15,7 @@ import Users from "./pages/Users";
 import Login from "./pages/Login";
 import Settings from "./pages/Settings";
 import Reports from "./pages/Reports";
+import Coupons from "./pages/Coupons";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -95,6 +96,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Procedures />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/cupons"
+                element={
+                  <ProtectedRoute>
+                    <Coupons />
                   </ProtectedRoute>
                 }
               />
