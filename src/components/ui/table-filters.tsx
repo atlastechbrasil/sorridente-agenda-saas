@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Filter, ArrowUpDown, Search } from 'lucide-react';
+import { Filter, ArrowUpDown } from 'lucide-react';
 
 interface TableFiltersProps {
   columns: Array<{
@@ -40,6 +40,21 @@ export const TableFilters = ({ columns, onFilter, onSort }: TableFiltersProps) =
     onFilter({});
   };
 
+  const getSelectDisplayValue = (key: string, options: string[]) => {
+    const currentValue = filters[key];
+    if (!currentValue) return 'Todos';
+    
+    // Transform display values for better UX
+    const valueMap: Record<string, string> = {
+      'general': 'Geral',
+      'specific': 'Específico',
+      'active': 'Ativo',
+      'expired': 'Expirado'
+    };
+    
+    return valueMap[currentValue] || currentValue;
+  };
+
   return (
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center space-x-2">
@@ -58,17 +73,23 @@ export const TableFilters = ({ columns, onFilter, onSort }: TableFiltersProps) =
                   <label className="text-sm font-medium">{column.label}</label>
                   {column.type === 'select' ? (
                     <Select
-                      value={filters[column.key] || ''}
-                      onValueChange={(value) => handleFilterChange(column.key, value)}
+                      value={filters[column.key] || 'all'}
+                      onValueChange={(value) => handleFilterChange(column.key, value === 'all' ? '' : value)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione..." />
+                        <SelectValue>
+                          {getSelectDisplayValue(column.key, column.options || [])}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Todos</SelectItem>
+                        <SelectItem value="all">Todos</SelectItem>
                         {column.options?.map((option) => (
                           <SelectItem key={option} value={option}>
-                            {option}
+                            {option === 'general' ? 'Geral' :
+                             option === 'specific' ? 'Específico' :
+                             option === 'active' ? 'Ativo' :
+                             option === 'expired' ? 'Expirado' :
+                             option}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -92,11 +113,12 @@ export const TableFilters = ({ columns, onFilter, onSort }: TableFiltersProps) =
       </div>
 
       <div className="flex items-center space-x-2">
-        <Select value={sortColumn} onValueChange={(value) => handleSort(value)}>
+        <Select value={sortColumn || 'none'} onValueChange={(value) => value !== 'none' && handleSort(value)}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Ordenar por..." />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="none">Ordenar por...</SelectItem>
             {columns.map((column) => (
               <SelectItem key={column.key} value={column.key}>
                 {column.label}
