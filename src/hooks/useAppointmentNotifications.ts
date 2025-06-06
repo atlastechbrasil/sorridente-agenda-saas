@@ -1,17 +1,24 @@
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotifications } from './useNotifications';
 import { toast } from 'sonner';
 
 export const useAppointmentNotifications = () => {
   const { addNotification } = useNotifications();
+  const subscriptionRef = useRef<any>(null);
 
   useEffect(() => {
+    // Skip if already subscribed
+    if (subscriptionRef.current) {
+      console.log('Appointment notifications already subscribed');
+      return;
+    }
+
     console.log('Setting up appointment notifications...');
 
     const channel = supabase
-      .channel('appointment_changes')
+      .channel(`appointment_changes_${Date.now()}`)
       .on(
         'postgres_changes',
         {
@@ -66,11 +73,19 @@ export const useAppointmentNotifications = () => {
       )
       .subscribe((status) => {
         console.log('Appointment notifications subscription status:', status);
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          subscriptionRef.current = null;
+        }
       });
 
+    subscriptionRef.current = channel;
+
     return () => {
-      console.log('Cleaning up appointment notifications...');
-      supabase.removeChannel(channel);
+      if (subscriptionRef.current) {
+        console.log('Cleaning up appointment notifications...');
+        supabase.removeChannel(subscriptionRef.current);
+        subscriptionRef.current = null;
+      }
     };
   }, [addNotification]);
 };
