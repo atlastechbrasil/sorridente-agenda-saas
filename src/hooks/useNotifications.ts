@@ -13,35 +13,45 @@ export interface Notification {
   read: boolean;
 }
 
-// Global channel manager to prevent multiple subscriptions
-const channelManager = {
-  activeChannel: null as any,
-  currentUserId: null as string | null,
-  
-  cleanup() {
-    if (this.activeChannel) {
-      console.log('Cleaning up global channel');
-      supabase.removeChannel(this.activeChannel);
-      this.activeChannel = null;
-      this.currentUserId = null;
+export const useNotifications = () => {
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const channelRef = useRef<any>(null);
+  const isSubscribedRef = useRef(false);
+
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      setLoading(false);
+      return;
     }
-  },
-  
-  createChannel(userId: string, callbacks: any) {
-    // If we already have a channel for this user, return it
-    if (this.activeChannel && this.currentUserId === userId) {
-      console.log('Reusing existing channel for user:', userId);
-      return this.activeChannel;
+
+    loadNotifications();
+    
+    // Only setup subscription if not already subscribed
+    if (!isSubscribedRef.current) {
+      setupRealtimeSubscription();
     }
+
+    return () => {
+      // Cleanup on unmount
+      if (channelRef.current) {
+        console.log('Cleaning up channel on unmount');
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+        isSubscribedRef.current = false;
+      }
+    };
+  }, [user?.id]);
+
+  const setupRealtimeSubscription = () => {
+    if (!user || isSubscribedRef.current) return;
+
+    console.log('Setting up realtime subscription for user:', user.id);
     
-    // Cleanup any existing channel
-    this.cleanup();
-    
-    console.log('Creating new channel for user:', userId);
-    this.currentUserId = userId;
-    
-    const channelName = `notifications_${userId}_${Date.now()}`;
-    this.activeChannel = supabase
+    const channelName = `notifications_${user.id}`;
+    const channel = supabase
       .channel(channelName)
       .on(
         'postgres_changes',
@@ -49,9 +59,29 @@ const channelManager = {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${userId}`
+          filter: `user_id=eq.${user.id}`
         },
-        callbacks.onNotification
+        (payload) => {
+          console.log('New notification received:', payload);
+          const newNotification = payload.new as Notification;
+          
+          setNotifications(prev => [newNotification, ...prev]);
+          
+          // Show toast
+          switch (newNotification.type) {
+            case 'success':
+              toast.success(newNotification.title, { description: newNotification.message });
+              break;
+            case 'error':
+              toast.error(newNotification.title, { description: newNotification.message });
+              break;
+            case 'warning':
+              toast.warning(newNotification.title, { description: newNotification.message });
+              break;
+            default:
+              toast.info(newNotification.title, { description: newNotification.message });
+          }
+        }
       )
       .on(
         'postgres_changes',
@@ -60,7 +90,24 @@ const channelManager = {
           schema: 'public',
           table: 'appointments'
         },
-        callbacks.onAppointmentCreate
+        (payload) => {
+          console.log('New appointment created:', payload);
+          
+          toast.success('Novo agendamento criado!', {
+            description: `Agendamento para ${payload.new.appointment_date} às ${payload.new.appointment_time}`
+          });
+
+          const appointmentNotification = {
+            id: `appointment_${payload.new.id}`,
+            title: 'Novo Agendamento',
+            message: `Um novo agendamento foi criado para ${payload.new.appointment_date} às ${payload.new.appointment_time}`,
+            type: 'info' as const,
+            created_at: new Date().toISOString(),
+            read: false
+          };
+
+          setNotifications(prev => [appointmentNotification, ...prev]);
+        }
       )
       .on(
         'postgres_changes',
@@ -69,148 +116,51 @@ const channelManager = {
           schema: 'public',
           table: 'appointments'
         },
-        callbacks.onAppointmentUpdate
+        (payload) => {
+          console.log('Appointment updated:', payload);
+          
+          if (payload.old.status !== payload.new.status) {
+            const statusLabels = {
+              pending: 'Pendente',
+              confirmed: 'Confirmado',
+              completed: 'Concluído',
+              cancelled: 'Cancelado'
+            };
+
+            toast.info('Agendamento atualizado!', {
+              description: `Status alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`
+            });
+
+            const appointmentUpdateNotification = {
+              id: `appointment_update_${payload.new.id}`,
+              title: 'Agendamento Atualizado',
+              message: `Status do agendamento alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`,
+              type: 'info' as const,
+              created_at: new Date().toISOString(),
+              read: false
+            };
+
+            setNotifications(prev => [appointmentUpdateNotification, ...prev]);
+          }
+        }
       );
 
-    this.activeChannel.subscribe((status: string) => {
-      console.log('Global channel subscription status:', status);
-      if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-        this.cleanup();
+    channel.subscribe((status: string) => {
+      console.log('Channel subscription status:', status);
+      if (status === 'SUBSCRIBED') {
+        channelRef.current = channel;
+        isSubscribedRef.current = true;
+        console.log('Successfully subscribed to notifications channel');
+      } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+        channelRef.current = null;
+        isSubscribedRef.current = false;
+        console.log('Channel closed or error occurred');
       }
     });
-
-    return this.activeChannel;
-  }
-};
-
-export const useNotifications = () => {
-  const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const mountedRef = useRef(true);
-  const subscribedRef = useRef(false);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!user) {
-      setNotifications([]);
-      setLoading(false);
-      subscribedRef.current = false;
-      return;
-    }
-
-    loadNotifications();
-    
-    // Only setup subscription if not already subscribed for this user
-    if (!subscribedRef.current) {
-      setupRealtimeSubscription();
-      subscribedRef.current = true;
-    }
-
-    return () => {
-      subscribedRef.current = false;
-    };
-  }, [user?.id]);
-
-  // Cleanup on component unmount
-  useEffect(() => {
-    return () => {
-      channelManager.cleanup();
-    };
-  }, []);
-
-  const setupRealtimeSubscription = () => {
-    if (!user) return;
-
-    const callbacks = {
-      onNotification: (payload: any) => {
-        console.log('New notification received:', payload);
-        
-        if (!mountedRef.current) return;
-        
-        const newNotification = payload.new as Notification;
-        
-        setNotifications(prev => [newNotification, ...prev]);
-        
-        // Show toast
-        switch (newNotification.type) {
-          case 'success':
-            toast.success(newNotification.title, { description: newNotification.message });
-            break;
-          case 'error':
-            toast.error(newNotification.title, { description: newNotification.message });
-            break;
-          case 'warning':
-            toast.warning(newNotification.title, { description: newNotification.message });
-            break;
-          default:
-            toast.info(newNotification.title, { description: newNotification.message });
-        }
-      },
-      
-      onAppointmentCreate: (payload: any) => {
-        console.log('New appointment created:', payload);
-        
-        if (!mountedRef.current) return;
-        
-        toast.success('Novo agendamento criado!', {
-          description: `Agendamento para ${payload.new.appointment_date} às ${payload.new.appointment_time}`
-        });
-
-        const appointmentNotification = {
-          id: `appointment_${payload.new.id}`,
-          title: 'Novo Agendamento',
-          message: `Um novo agendamento foi criado para ${payload.new.appointment_date} às ${payload.new.appointment_time}`,
-          type: 'info' as const,
-          created_at: new Date().toISOString(),
-          read: false
-        };
-
-        setNotifications(prev => [appointmentNotification, ...prev]);
-      },
-      
-      onAppointmentUpdate: (payload: any) => {
-        console.log('Appointment updated:', payload);
-        
-        if (!mountedRef.current) return;
-        
-        if (payload.old.status !== payload.new.status) {
-          const statusLabels = {
-            pending: 'Pendente',
-            confirmed: 'Confirmado',
-            completed: 'Concluído',
-            cancelled: 'Cancelado'
-          };
-
-          toast.info('Agendamento atualizado!', {
-            description: `Status alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`
-          });
-
-          const appointmentUpdateNotification = {
-            id: `appointment_update_${payload.new.id}`,
-            title: 'Agendamento Atualizado',
-            message: `Status do agendamento alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`,
-            type: 'info' as const,
-            created_at: new Date().toISOString(),
-            read: false
-          };
-
-          setNotifications(prev => [appointmentUpdateNotification, ...prev]);
-        }
-      }
-    };
-
-    channelManager.createChannel(user.id, callbacks);
   };
 
   const loadNotifications = async () => {
-    if (!user || !mountedRef.current) return;
+    if (!user) return;
 
     try {
       const { data, error } = await supabase
@@ -225,8 +175,6 @@ export const useNotifications = () => {
         return;
       }
 
-      if (!mountedRef.current) return;
-
       const formattedNotifications: Notification[] = data?.map(notification => ({
         id: notification.id,
         title: notification.title,
@@ -240,9 +188,7 @@ export const useNotifications = () => {
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
@@ -279,13 +225,11 @@ export const useNotifications = () => {
         return;
       }
 
-      if (mountedRef.current) {
-        setNotifications(prev =>
-          prev.map(notification =>
-            notification.id === id ? { ...notification, read: true } : notification
-          )
-        );
-      }
+      setNotifications(prev =>
+        prev.map(notification =>
+          notification.id === id ? { ...notification, read: true } : notification
+        )
+      );
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
@@ -305,11 +249,9 @@ export const useNotifications = () => {
         return;
       }
 
-      if (mountedRef.current) {
-        setNotifications(prev =>
-          prev.map(notification => ({ ...notification, read: true }))
-        );
-      }
+      setNotifications(prev =>
+        prev.map(notification => ({ ...notification, read: true }))
+      );
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
@@ -327,9 +269,7 @@ export const useNotifications = () => {
         return;
       }
 
-      if (mountedRef.current) {
-        setNotifications(prev => prev.filter(notification => notification.id !== id));
-      }
+      setNotifications(prev => prev.filter(notification => notification.id !== id));
     } catch (error) {
       console.error('Error removing notification:', error);
     }
