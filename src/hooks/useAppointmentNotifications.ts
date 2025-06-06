@@ -1,14 +1,39 @@
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotifications } from './useNotifications';
 import { toast } from 'sonner';
 
 export const useAppointmentNotifications = () => {
   const { addNotification } = useNotifications();
+  const channelRef = useRef<any>(null);
+  const isSubscribedRef = useRef(false);
 
   useEffect(() => {
+    if (!isSubscribedRef.current) {
+      setupAppointmentNotifications();
+    }
+
+    return cleanup;
+  }, [addNotification]);
+
+  const cleanup = () => {
+    if (channelRef.current) {
+      console.log('Cleaning up appointment notifications...');
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+      isSubscribedRef.current = false;
+    }
+  };
+
+  const setupAppointmentNotifications = () => {
+    if (isSubscribedRef.current) {
+      console.log('Appointment notifications already set up');
+      return;
+    }
+
     console.log('Setting up appointment notifications...');
+    isSubscribedRef.current = true;
 
     const channel = supabase
       .channel('appointment_changes')
@@ -43,7 +68,6 @@ export const useAppointmentNotifications = () => {
         (payload) => {
           console.log('Appointment updated:', payload);
           
-          // Verificar se o status mudou
           if (payload.old.status !== payload.new.status) {
             const statusLabels = {
               pending: 'Pendente',
@@ -66,11 +90,12 @@ export const useAppointmentNotifications = () => {
       )
       .subscribe((status) => {
         console.log('Appointment notifications subscription status:', status);
+        if (status === 'CLOSED') {
+          isSubscribedRef.current = false;
+          channelRef.current = null;
+        }
       });
 
-    return () => {
-      console.log('Cleaning up appointment notifications...');
-      supabase.removeChannel(channel);
-    };
-  }, [addNotification]);
+    channelRef.current = channel;
+  };
 };
