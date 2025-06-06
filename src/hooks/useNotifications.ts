@@ -13,21 +13,26 @@ export interface Notification {
   read: boolean;
 }
 
-// Global channel manager to prevent multiple subscriptions
-const globalChannelManager = {
-  activeChannels: new Map<string, any>(),
+// Global subscription manager to prevent multiple subscriptions
+const globalSubscriptionManager = {
+  activeSubscriptions: new Map<string, { channel: any; subscribed: boolean }>(),
   
-  getOrCreateChannel(userId: string, onNotification: (notification: Notification) => void, onAppointment: (payload: any) => void) {
+  createSubscription(userId: string, onNotification: (notification: Notification) => void, onAppointment: (payload: any) => void) {
     const channelKey = `notifications_${userId}`;
     
-    if (this.activeChannels.has(channelKey)) {
-      return this.activeChannels.get(channelKey);
+    // If already exists and subscribed, return it
+    if (this.activeSubscriptions.has(channelKey)) {
+      const existing = this.activeSubscriptions.get(channelKey);
+      if (existing?.subscribed) {
+        console.log('Reusing existing subscribed channel for user:', userId);
+        return existing.channel;
+      }
     }
 
-    console.log('Creating new channel for user:', userId);
+    console.log('Creating new subscription for user:', userId);
     
     const channel = supabase
-      .channel(channelKey)
+      .channel(channelKey, { config: { presence: { key: userId } } })
       .on(
         'postgres_changes',
         {
@@ -82,19 +87,44 @@ const globalChannelManager = {
         }
       );
 
-    this.activeChannels.set(channelKey, channel);
+    // Store the channel with subscribed = false initially
+    this.activeSubscriptions.set(channelKey, { channel, subscribed: false });
+    
+    // Subscribe and update the subscribed status
+    channel.subscribe((status: string) => {
+      console.log('Channel subscription status:', status);
+      const subscription = this.activeSubscriptions.get(channelKey);
+      if (subscription) {
+        if (status === 'SUBSCRIBED') {
+          subscription.subscribed = true;
+          console.log('Successfully subscribed to notifications channel');
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          subscription.subscribed = false;
+          console.log('Channel closed or error occurred');
+        }
+      }
+    });
+
     return channel;
   },
 
-  removeChannel(userId: string) {
+  removeSubscription(userId: string) {
     const channelKey = `notifications_${userId}`;
-    const channel = this.activeChannels.get(channelKey);
+    const subscription = this.activeSubscriptions.get(channelKey);
     
-    if (channel) {
-      console.log('Removing channel for user:', userId);
-      supabase.removeChannel(channel);
-      this.activeChannels.delete(channelKey);
+    if (subscription) {
+      console.log('Removing subscription for user:', userId);
+      supabase.removeChannel(subscription.channel);
+      this.activeSubscriptions.delete(channelKey);
     }
+  },
+
+  cleanup() {
+    console.log('Cleaning up all subscriptions');
+    this.activeSubscriptions.forEach((subscription, key) => {
+      supabase.removeChannel(subscription.channel);
+    });
+    this.activeSubscriptions.clear();
   }
 };
 
@@ -102,8 +132,8 @@ export const useNotifications = () => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
-  const subscribedRef = useRef(false);
   const currentUserIdRef = useRef<string | null>(null);
+  const isSetupRef = useRef(false);
 
   useEffect(() => {
     if (!user) {
@@ -112,44 +142,41 @@ export const useNotifications = () => {
       
       // Clean up previous subscriptions if user logged out
       if (currentUserIdRef.current) {
-        globalChannelManager.removeChannel(currentUserIdRef.current);
+        globalSubscriptionManager.removeSubscription(currentUserIdRef.current);
         currentUserIdRef.current = null;
-        subscribedRef.current = false;
+        isSetupRef.current = false;
       }
       return;
     }
 
     // If user changed, clean up previous subscription
     if (currentUserIdRef.current && currentUserIdRef.current !== user.id) {
-      globalChannelManager.removeChannel(currentUserIdRef.current);
-      subscribedRef.current = false;
+      globalSubscriptionManager.removeSubscription(currentUserIdRef.current);
+      isSetupRef.current = false;
     }
 
     currentUserIdRef.current = user.id;
     loadNotifications();
 
-    // Setup subscription only if not already subscribed for this user
-    if (!subscribedRef.current) {
+    // Setup subscription only once per user
+    if (!isSetupRef.current) {
       setupRealtimeSubscription();
+      isSetupRef.current = true;
     }
-
-    return () => {
-      // Don't cleanup on every effect run, only on unmount
-    };
   }, [user?.id]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (currentUserIdRef.current) {
-        globalChannelManager.removeChannel(currentUserIdRef.current);
-        subscribedRef.current = false;
+        globalSubscriptionManager.removeSubscription(currentUserIdRef.current);
+        isSetupRef.current = false;
       }
     };
   }, []);
 
   const setupRealtimeSubscription = () => {
-    if (!user || subscribedRef.current) return;
+    if (!user) return;
 
     console.log('Setting up realtime subscription for user:', user.id);
 
@@ -202,18 +229,7 @@ export const useNotifications = () => {
       }
     };
 
-    const channel = globalChannelManager.getOrCreateChannel(user.id, handleNotification, handleAppointment);
-
-    channel.subscribe((status: string) => {
-      console.log('Channel subscription status:', status);
-      if (status === 'SUBSCRIBED') {
-        subscribedRef.current = true;
-        console.log('Successfully subscribed to notifications channel');
-      } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-        subscribedRef.current = false;
-        console.log('Channel closed or error occurred');
-      }
-    });
+    globalSubscriptionManager.createSubscription(user.id, handleNotification, handleAppointment);
   };
 
   const loadNotifications = async () => {
