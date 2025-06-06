@@ -13,12 +13,9 @@ export interface Notification {
   read: boolean;
 }
 
-// Global subscription tracker to prevent multiple subscriptions across all hook instances
-const globalSubscriptionTracker = {
-  isSubscribed: false,
-  currentUserId: null as string | null,
-  channelRef: null as any,
-};
+// Simplified global subscription tracker
+let globalChannel: any = null;
+let globalUserId: string | null = null;
 
 export const useNotifications = () => {
   const { user } = useAuth();
@@ -36,12 +33,11 @@ export const useNotifications = () => {
   useEffect(() => {
     if (!user) {
       // Cleanup when user logs out
-      if (globalSubscriptionTracker.channelRef && globalSubscriptionTracker.currentUserId) {
+      if (globalChannel) {
         console.log('Cleaning up notifications subscription - user logged out');
-        supabase.removeChannel(globalSubscriptionTracker.channelRef);
-        globalSubscriptionTracker.channelRef = null;
-        globalSubscriptionTracker.isSubscribed = false;
-        globalSubscriptionTracker.currentUserId = null;
+        supabase.removeChannel(globalChannel);
+        globalChannel = null;
+        globalUserId = null;
       }
       setNotifications([]);
       setLoading(false);
@@ -49,32 +45,24 @@ export const useNotifications = () => {
     }
 
     // If user changed, cleanup old subscription
-    if (globalSubscriptionTracker.currentUserId && globalSubscriptionTracker.currentUserId !== user.id) {
-      if (globalSubscriptionTracker.channelRef) {
-        console.log('Cleaning up notifications subscription - user changed');
-        supabase.removeChannel(globalSubscriptionTracker.channelRef);
-        globalSubscriptionTracker.channelRef = null;
-        globalSubscriptionTracker.isSubscribed = false;
-      }
+    if (globalUserId && globalUserId !== user.id && globalChannel) {
+      console.log('Cleaning up notifications subscription - user changed');
+      supabase.removeChannel(globalChannel);
+      globalChannel = null;
+      globalUserId = null;
     }
 
     loadNotifications();
     
     // Only subscribe if not already subscribed for this user
-    if (!globalSubscriptionTracker.isSubscribed || globalSubscriptionTracker.currentUserId !== user.id) {
+    if (!globalChannel || globalUserId !== user.id) {
       subscribeToNotifications();
     }
 
-    // Cleanup function
+    // Cleanup function - only cleanup if we're the last component using this subscription
     return () => {
-      // Only cleanup if this component is unmounting and we're the ones who created the subscription
-      if (!mountedRef.current && globalSubscriptionTracker.channelRef && globalSubscriptionTracker.currentUserId === user?.id) {
-        console.log('Cleaning up notifications subscription - component unmount');
-        supabase.removeChannel(globalSubscriptionTracker.channelRef);
-        globalSubscriptionTracker.channelRef = null;
-        globalSubscriptionTracker.isSubscribed = false;
-        globalSubscriptionTracker.currentUserId = null;
-      }
+      // Don't cleanup the global subscription here as other components might be using it
+      // The cleanup will happen when user logs out or changes
     };
   }, [user?.id]);
 
@@ -116,16 +104,15 @@ export const useNotifications = () => {
   };
 
   const subscribeToNotifications = () => {
-    if (!user || globalSubscriptionTracker.isSubscribed) {
+    if (!user || globalChannel) {
       console.log('Skipping subscription - no user or already subscribed');
       return;
     }
 
-    console.log('Setting up unified notifications subscription for user:', user.id);
-    globalSubscriptionTracker.isSubscribed = true;
-    globalSubscriptionTracker.currentUserId = user.id;
+    console.log('Setting up notifications subscription for user:', user.id);
+    globalUserId = user.id;
 
-    const channelName = `unified_notifications_${user.id}_${Date.now()}_${Math.random()}`;
+    const channelName = `notifications_${user.id}_${Date.now()}`;
     const channel = supabase
       .channel(channelName)
       .on(
@@ -138,9 +125,10 @@ export const useNotifications = () => {
         },
         (payload) => {
           console.log('New notification received:', payload);
-          if (!mountedRef.current) return;
           
           const newNotification = payload.new as Notification;
+          
+          // Update state for all mounted components
           setNotifications(prev => [newNotification, ...prev]);
           
           switch (newNotification.type) {
@@ -182,9 +170,7 @@ export const useNotifications = () => {
             read: false
           };
 
-          if (mountedRef.current) {
-            setNotifications(prev => [appointmentNotification, ...prev]);
-          }
+          setNotifications(prev => [appointmentNotification, ...prev]);
         }
       )
       .on(
@@ -220,22 +206,19 @@ export const useNotifications = () => {
               read: false
             };
 
-            if (mountedRef.current) {
-              setNotifications(prev => [appointmentUpdateNotification, ...prev]);
-            }
+            setNotifications(prev => [appointmentUpdateNotification, ...prev]);
           }
         }
       )
       .subscribe((status) => {
-        console.log('Unified notifications subscription status:', status);
+        console.log('Notifications subscription status:', status);
         if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          globalSubscriptionTracker.channelRef = null;
-          globalSubscriptionTracker.isSubscribed = false;
-          globalSubscriptionTracker.currentUserId = null;
+          globalChannel = null;
+          globalUserId = null;
         }
       });
     
-    globalSubscriptionTracker.channelRef = channel;
+    globalChannel = channel;
   };
 
   const addNotification = async (notification: Omit<Notification, 'id' | 'created_at' | 'read'>) => {
