@@ -59,10 +59,11 @@ export const UserModal = ({ isOpen, onClose, onSave, user }: UserModalProps) => 
     try {
       setIsUpdating(true);
       
-      // Use the user's updateUser method for password changes
-      const { error } = await supabase.auth.updateUser({
-        password: formData.password
-      });
+      // Use admin API to update user password
+      const { error } = await supabase.auth.admin.updateUserById(
+        user.id,
+        { password: formData.password }
+      );
 
       if (error) {
         console.error('Error updating password:', error);

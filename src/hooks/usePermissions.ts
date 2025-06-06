@@ -17,18 +17,22 @@ export const usePermissions = () => {
   const { user } = useAuth();
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [userRoles, setUserRoles] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadUserPermissions = async () => {
       if (!user) {
         setUserPermissions([]);
         setUserRoles([]);
+        setLoading(false);
         return;
       }
 
       try {
+        console.log('Loading permissions for user role:', user.role);
+        
         // Carregar permissões baseadas no role do profile
-        const { data: rolePermissions } = await supabase
+        const { data: rolePermissions, error } = await supabase
           .from('role_permissions')
           .select(`
             permission_id,
@@ -38,28 +42,56 @@ export const usePermissions = () => {
           `)
           .eq('role', user.role);
 
-        if (rolePermissions) {
+        if (error) {
+          console.error('Error loading role permissions:', error);
+        } else if (rolePermissions) {
           const permissions = rolePermissions
             .map(rp => rp.permissions?.name)
             .filter(Boolean);
+          console.log('Loaded permissions from DB:', permissions);
           setUserPermissions(permissions);
         }
 
         // Carregar roles adicionais do usuário
-        const { data: additionalRoles } = await supabase
+        const { data: additionalRoles, error: rolesError } = await supabase
           .from('user_roles')
           .select('role')
           .eq('user_id', user.id);
 
-        if (additionalRoles) {
+        if (rolesError) {
+          console.error('Error loading additional roles:', rolesError);
+        } else if (additionalRoles) {
           setUserRoles(additionalRoles.map(r => r.role));
         }
       } catch (error) {
         console.error('Error loading user permissions:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
     loadUserPermissions();
+
+    // Recarregar permissões quando há mudanças na tabela role_permissions
+    const channel = supabase
+      .channel('role_permissions_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'role_permissions'
+        },
+        () => {
+          console.log('Role permissions changed, reloading...');
+          loadUserPermissions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   const hasPermission = (permission: Permission): boolean => {
@@ -113,6 +145,7 @@ export const usePermissions = () => {
     hasAllPermissions,
     userRole: user?.role,
     userRoles,
-    userPermissions
+    userPermissions,
+    loading
   };
 };

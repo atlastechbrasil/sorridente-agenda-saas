@@ -4,10 +4,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Shield, Check, X } from 'lucide-react';
+import { Shield, Check, X, Plus, Trash2 } from 'lucide-react';
 
 interface Permission {
   id: string;
@@ -25,7 +26,7 @@ interface RolePermissionsModalProps {
   onClose: () => void;
 }
 
-const roleLabels = {
+const defaultRoleLabels = {
   admin: 'Administrador',
   dentist: 'Dentista',
   assistant: 'Assistente'
@@ -34,6 +35,8 @@ const roleLabels = {
 export const RolePermissionsModal = ({ isOpen, onClose }: RolePermissionsModalProps) => {
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [rolePermissions, setRolePermissions] = useState<RolePermission[]>([]);
+  const [customRoles, setCustomRoles] = useState<string[]>([]);
+  const [newRoleName, setNewRoleName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -70,14 +73,37 @@ export const RolePermissionsModal = ({ isOpen, onClose }: RolePermissionsModalPr
         return;
       }
 
+      // Carregar roles customizados (além dos padrão)
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('role')
+        .not('role', 'in', '(admin,dentist,assistant)');
+
+      if (profilesError) {
+        console.error('Error loading custom roles:', profilesError);
+      }
+
+      const uniqueCustomRoles = profilesData 
+        ? [...new Set(profilesData.map(p => p.role))]
+        : [];
+
       setPermissions(permissionsData || []);
       setRolePermissions(rolePermissionsData || []);
+      setCustomRoles(uniqueCustomRoles);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
     }
+  };
+
+  const getAllRoles = () => {
+    return [...Object.keys(defaultRoleLabels), ...customRoles];
+  };
+
+  const getRoleLabel = (role: string) => {
+    return defaultRoleLabels[role as keyof typeof defaultRoleLabels] || role;
   };
 
   const hasPermission = (role: string, permissionId: string) => {
@@ -127,6 +153,59 @@ export const RolePermissionsModal = ({ isOpen, onClose }: RolePermissionsModalPr
     }
   };
 
+  const createNewRole = async () => {
+    if (!newRoleName.trim()) {
+      toast.error('Digite o nome da nova função');
+      return;
+    }
+
+    if (getAllRoles().includes(newRoleName.toLowerCase())) {
+      toast.error('Esta função já existe');
+      return;
+    }
+
+    try {
+      setCustomRoles(prev => [...prev, newRoleName.toLowerCase()]);
+      setNewRoleName('');
+      toast.success('Nova função criada com sucesso!');
+    } catch (error) {
+      console.error('Error creating role:', error);
+      toast.error('Erro ao criar nova função');
+    }
+  };
+
+  const deleteCustomRole = async (roleToDelete: string) => {
+    if (Object.keys(defaultRoleLabels).includes(roleToDelete)) {
+      toast.error('Não é possível deletar funções padrão do sistema');
+      return;
+    }
+
+    if (!confirm(`Tem certeza que deseja deletar a função "${roleToDelete}"?`)) {
+      return;
+    }
+
+    try {
+      // Remover todas as permissões do role
+      const { error: permError } = await supabase
+        .from('role_permissions')
+        .delete()
+        .eq('role', roleToDelete);
+
+      if (permError) {
+        console.error('Error deleting role permissions:', permError);
+        toast.error('Erro ao deletar permissões da função');
+        return;
+      }
+
+      setCustomRoles(prev => prev.filter(r => r !== roleToDelete));
+      setRolePermissions(prev => prev.filter(rp => rp.role !== roleToDelete));
+      toast.success('Função deletada com sucesso!');
+    } catch (error) {
+      console.error('Error deleting role:', error);
+      toast.error('Erro ao deletar função');
+    }
+  };
+
   if (loading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -156,10 +235,44 @@ export const RolePermissionsModal = ({ isOpen, onClose }: RolePermissionsModalPr
         </DialogHeader>
         
         <div className="space-y-6">
-          {Object.entries(roleLabels).map(([role, label]) => (
+          {/* Criar nova função */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Criar Nova Função</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Nome da nova função"
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && createNewRole()}
+                />
+                <Button onClick={createNewRole} disabled={saving}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Criar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Gerenciar permissões por função */}
+          {getAllRoles().map((role) => (
             <Card key={role}>
               <CardHeader>
-                <CardTitle className="text-lg">{label}</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">{getRoleLabel(role)}</CardTitle>
+                  {!Object.keys(defaultRoleLabels).includes(role) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => deleteCustomRole(role)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
