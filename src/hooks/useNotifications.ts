@@ -13,15 +13,175 @@ export interface Notification {
   read: boolean;
 }
 
-// Simplified global subscription tracker
-let globalChannel: any = null;
-let globalUserId: string | null = null;
+// Global subscription management
+class NotificationSubscriptionManager {
+  private static instance: NotificationSubscriptionManager;
+  private channel: any = null;
+  private currentUserId: string | null = null;
+  private subscribers = new Set<(notifications: Notification[]) => void>();
+
+  static getInstance(): NotificationSubscriptionManager {
+    if (!NotificationSubscriptionManager.instance) {
+      NotificationSubscriptionManager.instance = new NotificationSubscriptionManager();
+    }
+    return NotificationSubscriptionManager.instance;
+  }
+
+  subscribe(userId: string, callback: (notifications: Notification[]) => void) {
+    this.subscribers.add(callback);
+    
+    if (this.currentUserId !== userId) {
+      this.cleanup();
+      this.currentUserId = userId;
+      this.setupChannel(userId);
+    }
+  }
+
+  unsubscribe(callback: (notifications: Notification[]) => void) {
+    this.subscribers.delete(callback);
+    
+    if (this.subscribers.size === 0) {
+      this.cleanup();
+    }
+  }
+
+  private setupChannel(userId: string) {
+    if (this.channel) return;
+
+    console.log('Setting up notifications subscription for user:', userId);
+    
+    const channelName = `notifications_${userId}_${Date.now()}`;
+    this.channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`
+        },
+        (payload) => {
+          console.log('New notification received:', payload);
+          
+          const newNotification = payload.new as Notification;
+          
+          // Notify all subscribers
+          this.subscribers.forEach(callback => {
+            callback([newNotification]);
+          });
+          
+          // Show toast
+          switch (newNotification.type) {
+            case 'success':
+              toast.success(newNotification.title, { description: newNotification.message });
+              break;
+            case 'error':
+              toast.error(newNotification.title, { description: newNotification.message });
+              break;
+            case 'warning':
+              toast.warning(newNotification.title, { description: newNotification.message });
+              break;
+            default:
+              toast.info(newNotification.title, { description: newNotification.message });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'appointments'
+        },
+        (payload) => {
+          console.log('New appointment created:', payload);
+          
+          toast.success('Novo agendamento criado!', {
+            description: `Agendamento para ${payload.new.appointment_date} às ${payload.new.appointment_time}`
+          });
+
+          const appointmentNotification = {
+            id: `appointment_${payload.new.id}`,
+            title: 'Novo Agendamento',
+            message: `Um novo agendamento foi criado para ${payload.new.appointment_date} às ${payload.new.appointment_time}`,
+            type: 'info' as const,
+            created_at: new Date().toISOString(),
+            read: false
+          };
+
+          this.subscribers.forEach(callback => {
+            callback([appointmentNotification]);
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'appointments'
+        },
+        (payload) => {
+          console.log('Appointment updated:', payload);
+          
+          if (payload.old.status !== payload.new.status) {
+            const statusLabels = {
+              pending: 'Pendente',
+              confirmed: 'Confirmado',
+              completed: 'Concluído',
+              cancelled: 'Cancelado'
+            };
+
+            toast.info('Agendamento atualizado!', {
+              description: `Status alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`
+            });
+
+            const appointmentUpdateNotification = {
+              id: `appointment_update_${payload.new.id}`,
+              title: 'Agendamento Atualizado',
+              message: `Status do agendamento alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`,
+              type: 'info' as const,
+              created_at: new Date().toISOString(),
+              read: false
+            };
+
+            this.subscribers.forEach(callback => {
+              callback([appointmentUpdateNotification]);
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Notifications subscription status:', status);
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          this.cleanup();
+        }
+      });
+  }
+
+  private cleanup() {
+    if (this.channel) {
+      console.log('Cleaning up notifications subscription');
+      supabase.removeChannel(this.channel);
+      this.channel = null;
+      this.currentUserId = null;
+    }
+  }
+
+  cleanupForUser(userId: string) {
+    if (this.currentUserId === userId) {
+      this.cleanup();
+    }
+  }
+}
 
 export const useNotifications = () => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
+  const subscriptionManager = NotificationSubscriptionManager.getInstance();
 
   useEffect(() => {
     mountedRef.current = true;
@@ -32,37 +192,25 @@ export const useNotifications = () => {
 
   useEffect(() => {
     if (!user) {
-      // Cleanup when user logs out
-      if (globalChannel) {
-        console.log('Cleaning up notifications subscription - user logged out');
-        supabase.removeChannel(globalChannel);
-        globalChannel = null;
-        globalUserId = null;
-      }
+      subscriptionManager.cleanupForUser(user?.id || '');
       setNotifications([]);
       setLoading(false);
       return;
     }
 
-    // If user changed, cleanup old subscription
-    if (globalUserId && globalUserId !== user.id && globalChannel) {
-      console.log('Cleaning up notifications subscription - user changed');
-      supabase.removeChannel(globalChannel);
-      globalChannel = null;
-      globalUserId = null;
-    }
-
     loadNotifications();
     
-    // Only subscribe if not already subscribed for this user
-    if (!globalChannel || globalUserId !== user.id) {
-      subscribeToNotifications();
-    }
+    // Subscribe to real-time updates
+    const handleNewNotifications = (newNotifications: Notification[]) => {
+      if (!mountedRef.current) return;
+      
+      setNotifications(prev => [...newNotifications, ...prev]);
+    };
 
-    // Cleanup function - only cleanup if we're the last component using this subscription
+    subscriptionManager.subscribe(user.id, handleNewNotifications);
+
     return () => {
-      // Don't cleanup the global subscription here as other components might be using it
-      // The cleanup will happen when user logs out or changes
+      subscriptionManager.unsubscribe(handleNewNotifications);
     };
   }, [user?.id]);
 
@@ -101,124 +249,6 @@ export const useNotifications = () => {
         setLoading(false);
       }
     }
-  };
-
-  const subscribeToNotifications = () => {
-    if (!user || globalChannel) {
-      console.log('Skipping subscription - no user or already subscribed');
-      return;
-    }
-
-    console.log('Setting up notifications subscription for user:', user.id);
-    globalUserId = user.id;
-
-    const channelName = `notifications_${user.id}_${Date.now()}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`
-        },
-        (payload) => {
-          console.log('New notification received:', payload);
-          
-          const newNotification = payload.new as Notification;
-          
-          // Update state for all mounted components
-          setNotifications(prev => [newNotification, ...prev]);
-          
-          switch (newNotification.type) {
-            case 'success':
-              toast.success(newNotification.title, { description: newNotification.message });
-              break;
-            case 'error':
-              toast.error(newNotification.title, { description: newNotification.message });
-              break;
-            case 'warning':
-              toast.warning(newNotification.title, { description: newNotification.message });
-              break;
-            default:
-              toast.info(newNotification.title, { description: newNotification.message });
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'appointments'
-        },
-        (payload) => {
-          console.log('New appointment created:', payload);
-          
-          toast.success('Novo agendamento criado!', {
-            description: `Agendamento para ${payload.new.appointment_date} às ${payload.new.appointment_time}`
-          });
-
-          // Add notification to state
-          const appointmentNotification = {
-            id: `appointment_${payload.new.id}`,
-            title: 'Novo Agendamento',
-            message: `Um novo agendamento foi criado para ${payload.new.appointment_date} às ${payload.new.appointment_time}`,
-            type: 'info' as const,
-            created_at: new Date().toISOString(),
-            read: false
-          };
-
-          setNotifications(prev => [appointmentNotification, ...prev]);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'appointments'
-        },
-        (payload) => {
-          console.log('Appointment updated:', payload);
-          
-          // Verificar se o status mudou
-          if (payload.old.status !== payload.new.status) {
-            const statusLabels = {
-              pending: 'Pendente',
-              confirmed: 'Confirmado',
-              completed: 'Concluído',
-              cancelled: 'Cancelado'
-            };
-
-            toast.info('Agendamento atualizado!', {
-              description: `Status alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`
-            });
-
-            // Add notification to state
-            const appointmentUpdateNotification = {
-              id: `appointment_update_${payload.new.id}`,
-              title: 'Agendamento Atualizado',
-              message: `Status do agendamento alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`,
-              type: 'info' as const,
-              created_at: new Date().toISOString(),
-              read: false
-            };
-
-            setNotifications(prev => [appointmentUpdateNotification, ...prev]);
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('Notifications subscription status:', status);
-        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          globalChannel = null;
-          globalUserId = null;
-        }
-      });
-    
-    globalChannel = channel;
   };
 
   const addNotification = async (notification: Omit<Notification, 'id' | 'created_at' | 'read'>) => {
