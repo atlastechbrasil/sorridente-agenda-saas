@@ -18,6 +18,7 @@ export const useNotifications = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const subscriptionRef = useRef<any>(null);
+  const isSubscribedRef = useRef(false);
 
   useEffect(() => {
     if (!user) {
@@ -26,6 +27,7 @@ export const useNotifications = () => {
         console.log('Cleaning up notifications subscription - user logged out');
         supabase.removeChannel(subscriptionRef.current);
         subscriptionRef.current = null;
+        isSubscribedRef.current = false;
       }
       setNotifications([]);
       setLoading(false);
@@ -33,7 +35,7 @@ export const useNotifications = () => {
     }
 
     // Only proceed if we don't already have an active subscription
-    if (subscriptionRef.current) {
+    if (subscriptionRef.current || isSubscribedRef.current) {
       console.log('Notifications subscription already active');
       return;
     }
@@ -47,6 +49,7 @@ export const useNotifications = () => {
         console.log('Cleaning up notifications subscription - component unmount');
         supabase.removeChannel(subscriptionRef.current);
         subscriptionRef.current = null;
+        isSubscribedRef.current = false;
       }
     };
   }, [user?.id]);
@@ -85,15 +88,16 @@ export const useNotifications = () => {
   };
 
   const subscribeToNotifications = () => {
-    if (!user || subscriptionRef.current) {
+    if (!user || subscriptionRef.current || isSubscribedRef.current) {
       console.log('Skipping subscription - no user or already subscribed');
       return;
     }
 
     console.log('Subscribing to notifications for user:', user.id);
+    isSubscribedRef.current = true;
 
     const channel = supabase
-      .channel(`notifications_${user.id}_${Date.now()}`)
+      .channel(`notifications_${user.id}_${Date.now()}_${Math.random()}`)
       .on(
         'postgres_changes',
         {
@@ -126,6 +130,7 @@ export const useNotifications = () => {
         console.log('Notifications subscription status:', status);
         if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
           subscriptionRef.current = null;
+          isSubscribedRef.current = false;
         }
       });
     
