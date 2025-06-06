@@ -6,10 +6,14 @@ import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
 import { AppointmentsList } from "@/components/Appointments/AppointmentsList";
 import AppointmentsCalendar from "@/components/Appointments/AppointmentsCalendar";
+import { useAppointmentNotifications } from "@/hooks/useAppointmentNotifications";
 
 const Appointments = () => {
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Ativar notificações de agendamento
+  useAppointmentNotifications();
 
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed);
