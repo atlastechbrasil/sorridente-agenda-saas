@@ -13,59 +13,33 @@ export interface Notification {
   read: boolean;
 }
 
-export const useNotifications = () => {
-  const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const channelRef = useRef<any>(null);
-  const isSubscribedRef = useRef(false);
-
-  useEffect(() => {
-    if (!user) {
-      setNotifications([]);
-      setLoading(false);
-      return;
+// Global channel manager to prevent multiple subscriptions
+const globalChannelManager = {
+  activeChannels: new Map<string, any>(),
+  
+  getOrCreateChannel(userId: string, onNotification: (notification: Notification) => void, onAppointment: (payload: any) => void) {
+    const channelKey = `notifications_${userId}`;
+    
+    if (this.activeChannels.has(channelKey)) {
+      return this.activeChannels.get(channelKey);
     }
 
-    loadNotifications();
+    console.log('Creating new channel for user:', userId);
     
-    // Only setup subscription if not already subscribed
-    if (!isSubscribedRef.current) {
-      setupRealtimeSubscription();
-    }
-
-    return () => {
-      // Cleanup on unmount
-      if (channelRef.current) {
-        console.log('Cleaning up channel on unmount');
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-        isSubscribedRef.current = false;
-      }
-    };
-  }, [user?.id]);
-
-  const setupRealtimeSubscription = () => {
-    if (!user || isSubscribedRef.current) return;
-
-    console.log('Setting up realtime subscription for user:', user.id);
-    
-    const channelName = `notifications_${user.id}`;
     const channel = supabase
-      .channel(channelName)
+      .channel(channelKey)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${user.id}`
+          filter: `user_id=eq.${userId}`
         },
         (payload) => {
           console.log('New notification received:', payload);
           const newNotification = payload.new as Notification;
-          
-          setNotifications(prev => [newNotification, ...prev]);
+          onNotification(newNotification);
           
           // Show toast
           switch (newNotification.type) {
@@ -92,21 +66,7 @@ export const useNotifications = () => {
         },
         (payload) => {
           console.log('New appointment created:', payload);
-          
-          toast.success('Novo agendamento criado!', {
-            description: `Agendamento para ${payload.new.appointment_date} às ${payload.new.appointment_time}`
-          });
-
-          const appointmentNotification = {
-            id: `appointment_${payload.new.id}`,
-            title: 'Novo Agendamento',
-            message: `Um novo agendamento foi criado para ${payload.new.appointment_date} às ${payload.new.appointment_time}`,
-            type: 'info' as const,
-            created_at: new Date().toISOString(),
-            read: false
-          };
-
-          setNotifications(prev => [appointmentNotification, ...prev]);
+          onAppointment(payload);
         }
       )
       .on(
@@ -118,42 +78,139 @@ export const useNotifications = () => {
         },
         (payload) => {
           console.log('Appointment updated:', payload);
-          
-          if (payload.old.status !== payload.new.status) {
-            const statusLabels = {
-              pending: 'Pendente',
-              confirmed: 'Confirmado',
-              completed: 'Concluído',
-              cancelled: 'Cancelado'
-            };
-
-            toast.info('Agendamento atualizado!', {
-              description: `Status alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`
-            });
-
-            const appointmentUpdateNotification = {
-              id: `appointment_update_${payload.new.id}`,
-              title: 'Agendamento Atualizado',
-              message: `Status do agendamento alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`,
-              type: 'info' as const,
-              created_at: new Date().toISOString(),
-              read: false
-            };
-
-            setNotifications(prev => [appointmentUpdateNotification, ...prev]);
-          }
+          onAppointment(payload);
         }
       );
+
+    this.activeChannels.set(channelKey, channel);
+    return channel;
+  },
+
+  removeChannel(userId: string) {
+    const channelKey = `notifications_${userId}`;
+    const channel = this.activeChannels.get(channelKey);
+    
+    if (channel) {
+      console.log('Removing channel for user:', userId);
+      supabase.removeChannel(channel);
+      this.activeChannels.delete(channelKey);
+    }
+  }
+};
+
+export const useNotifications = () => {
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const subscribedRef = useRef(false);
+  const currentUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      setLoading(false);
+      
+      // Clean up previous subscriptions if user logged out
+      if (currentUserIdRef.current) {
+        globalChannelManager.removeChannel(currentUserIdRef.current);
+        currentUserIdRef.current = null;
+        subscribedRef.current = false;
+      }
+      return;
+    }
+
+    // If user changed, clean up previous subscription
+    if (currentUserIdRef.current && currentUserIdRef.current !== user.id) {
+      globalChannelManager.removeChannel(currentUserIdRef.current);
+      subscribedRef.current = false;
+    }
+
+    currentUserIdRef.current = user.id;
+    loadNotifications();
+
+    // Setup subscription only if not already subscribed for this user
+    if (!subscribedRef.current) {
+      setupRealtimeSubscription();
+    }
+
+    return () => {
+      // Don't cleanup on every effect run, only on unmount
+    };
+  }, [user?.id]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (currentUserIdRef.current) {
+        globalChannelManager.removeChannel(currentUserIdRef.current);
+        subscribedRef.current = false;
+      }
+    };
+  }, []);
+
+  const setupRealtimeSubscription = () => {
+    if (!user || subscribedRef.current) return;
+
+    console.log('Setting up realtime subscription for user:', user.id);
+
+    const handleNotification = (newNotification: Notification) => {
+      setNotifications(prev => [newNotification, ...prev]);
+    };
+
+    const handleAppointment = (payload: any) => {
+      if (payload.new && payload.old) {
+        // Update event
+        if (payload.old.status !== payload.new.status) {
+          const statusLabels = {
+            pending: 'Pendente',
+            confirmed: 'Confirmado',
+            completed: 'Concluído',
+            cancelled: 'Cancelado'
+          };
+
+          toast.info('Agendamento atualizado!', {
+            description: `Status alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`
+          });
+
+          const appointmentUpdateNotification = {
+            id: `appointment_update_${payload.new.id}`,
+            title: 'Agendamento Atualizado',
+            message: `Status do agendamento alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`,
+            type: 'info' as const,
+            created_at: new Date().toISOString(),
+            read: false
+          };
+
+          setNotifications(prev => [appointmentUpdateNotification, ...prev]);
+        }
+      } else if (payload.new) {
+        // Insert event
+        toast.success('Novo agendamento criado!', {
+          description: `Agendamento para ${payload.new.appointment_date} às ${payload.new.appointment_time}`
+        });
+
+        const appointmentNotification = {
+          id: `appointment_${payload.new.id}`,
+          title: 'Novo Agendamento',
+          message: `Um novo agendamento foi criado para ${payload.new.appointment_date} às ${payload.new.appointment_time}`,
+          type: 'info' as const,
+          created_at: new Date().toISOString(),
+          read: false
+        };
+
+        setNotifications(prev => [appointmentNotification, ...prev]);
+      }
+    };
+
+    const channel = globalChannelManager.getOrCreateChannel(user.id, handleNotification, handleAppointment);
 
     channel.subscribe((status: string) => {
       console.log('Channel subscription status:', status);
       if (status === 'SUBSCRIBED') {
-        channelRef.current = channel;
-        isSubscribedRef.current = true;
+        subscribedRef.current = true;
         console.log('Successfully subscribed to notifications channel');
       } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-        channelRef.current = null;
-        isSubscribedRef.current = false;
+        subscribedRef.current = false;
         console.log('Channel closed or error occurred');
       }
     });
