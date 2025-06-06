@@ -13,45 +13,51 @@ export interface Notification {
   read: boolean;
 }
 
-// Global subscription management
-class NotificationSubscriptionManager {
-  private static instance: NotificationSubscriptionManager;
-  private channel: any = null;
-  private currentUserId: string | null = null;
-  private subscribers = new Set<(notifications: Notification[]) => void>();
+export const useNotifications = () => {
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const channelRef = useRef<any>(null);
+  const mountedRef = useRef(true);
 
-  static getInstance(): NotificationSubscriptionManager {
-    if (!NotificationSubscriptionManager.instance) {
-      NotificationSubscriptionManager.instance = new NotificationSubscriptionManager();
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      cleanup();
+      setNotifications([]);
+      setLoading(false);
+      return;
     }
-    return NotificationSubscriptionManager.instance;
-  }
 
-  subscribe(userId: string, callback: (notifications: Notification[]) => void) {
-    this.subscribers.add(callback);
-    
-    if (this.currentUserId !== userId) {
-      this.cleanup();
-      this.currentUserId = userId;
-      this.setupChannel(userId);
+    loadNotifications();
+    setupRealtimeSubscription();
+
+    return () => {
+      cleanup();
+    };
+  }, [user?.id]);
+
+  const cleanup = () => {
+    if (channelRef.current) {
+      console.log('Cleaning up notifications subscription');
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
     }
-  }
+  };
 
-  unsubscribe(callback: (notifications: Notification[]) => void) {
-    this.subscribers.delete(callback);
+  const setupRealtimeSubscription = () => {
+    if (!user || channelRef.current) return;
+
+    console.log('Setting up notifications subscription for user:', user.id);
     
-    if (this.subscribers.size === 0) {
-      this.cleanup();
-    }
-  }
-
-  private setupChannel(userId: string) {
-    if (this.channel) return;
-
-    console.log('Setting up notifications subscription for user:', userId);
-    
-    const channelName = `notifications_${userId}_${Date.now()}`;
-    this.channel = supabase
+    const channelName = `notifications_${user.id}_${Date.now()}`;
+    const channel = supabase
       .channel(channelName)
       .on(
         'postgres_changes',
@@ -59,17 +65,16 @@ class NotificationSubscriptionManager {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${userId}`
+          filter: `user_id=eq.${user.id}`
         },
         (payload) => {
           console.log('New notification received:', payload);
           
+          if (!mountedRef.current) return;
+          
           const newNotification = payload.new as Notification;
           
-          // Notify all subscribers
-          this.subscribers.forEach(callback => {
-            callback([newNotification]);
-          });
+          setNotifications(prev => [newNotification, ...prev]);
           
           // Show toast
           switch (newNotification.type) {
@@ -97,6 +102,8 @@ class NotificationSubscriptionManager {
         (payload) => {
           console.log('New appointment created:', payload);
           
+          if (!mountedRef.current) return;
+          
           toast.success('Novo agendamento criado!', {
             description: `Agendamento para ${payload.new.appointment_date} às ${payload.new.appointment_time}`
           });
@@ -110,9 +117,7 @@ class NotificationSubscriptionManager {
             read: false
           };
 
-          this.subscribers.forEach(callback => {
-            callback([appointmentNotification]);
-          });
+          setNotifications(prev => [appointmentNotification, ...prev]);
         }
       )
       .on(
@@ -124,6 +129,8 @@ class NotificationSubscriptionManager {
         },
         (payload) => {
           console.log('Appointment updated:', payload);
+          
+          if (!mountedRef.current) return;
           
           if (payload.old.status !== payload.new.status) {
             const statusLabels = {
@@ -146,73 +153,20 @@ class NotificationSubscriptionManager {
               read: false
             };
 
-            this.subscribers.forEach(callback => {
-              callback([appointmentUpdateNotification]);
-            });
+            setNotifications(prev => [appointmentUpdateNotification, ...prev]);
           }
         }
-      )
-      .subscribe((status) => {
-        console.log('Notifications subscription status:', status);
-        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          this.cleanup();
-        }
-      });
-  }
+      );
 
-  private cleanup() {
-    if (this.channel) {
-      console.log('Cleaning up notifications subscription');
-      supabase.removeChannel(this.channel);
-      this.channel = null;
-      this.currentUserId = null;
-    }
-  }
+    channel.subscribe((status) => {
+      console.log('Notifications subscription status:', status);
+      if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+        channelRef.current = null;
+      }
+    });
 
-  cleanupForUser(userId: string) {
-    if (this.currentUserId === userId) {
-      this.cleanup();
-    }
-  }
-}
-
-export const useNotifications = () => {
-  const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const mountedRef = useRef(true);
-  const subscriptionManager = NotificationSubscriptionManager.getInstance();
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!user) {
-      subscriptionManager.cleanupForUser(user?.id || '');
-      setNotifications([]);
-      setLoading(false);
-      return;
-    }
-
-    loadNotifications();
-    
-    // Subscribe to real-time updates
-    const handleNewNotifications = (newNotifications: Notification[]) => {
-      if (!mountedRef.current) return;
-      
-      setNotifications(prev => [...newNotifications, ...prev]);
-    };
-
-    subscriptionManager.subscribe(user.id, handleNewNotifications);
-
-    return () => {
-      subscriptionManager.unsubscribe(handleNewNotifications);
-    };
-  }, [user?.id]);
+    channelRef.current = channel;
+  };
 
   const loadNotifications = async () => {
     if (!user || !mountedRef.current) return;
