@@ -121,11 +121,11 @@ export const useNotifications = () => {
       return;
     }
 
-    console.log('Subscribing to notifications for user:', user.id);
+    console.log('Setting up unified notifications subscription for user:', user.id);
     globalSubscriptionTracker.isSubscribed = true;
     globalSubscriptionTracker.currentUserId = user.id;
 
-    const channelName = `notifications_${user.id}_${Date.now()}_${Math.random()}`;
+    const channelName = `unified_notifications_${user.id}_${Date.now()}_${Math.random()}`;
     const channel = supabase
       .channel(channelName)
       .on(
@@ -158,8 +158,76 @@ export const useNotifications = () => {
           }
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'appointments'
+        },
+        (payload) => {
+          console.log('New appointment created:', payload);
+          
+          toast.success('Novo agendamento criado!', {
+            description: `Agendamento para ${payload.new.appointment_date} às ${payload.new.appointment_time}`
+          });
+
+          // Add notification to state
+          const appointmentNotification = {
+            id: `appointment_${payload.new.id}`,
+            title: 'Novo Agendamento',
+            message: `Um novo agendamento foi criado para ${payload.new.appointment_date} às ${payload.new.appointment_time}`,
+            type: 'info' as const,
+            created_at: new Date().toISOString(),
+            read: false
+          };
+
+          if (mountedRef.current) {
+            setNotifications(prev => [appointmentNotification, ...prev]);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'appointments'
+        },
+        (payload) => {
+          console.log('Appointment updated:', payload);
+          
+          // Verificar se o status mudou
+          if (payload.old.status !== payload.new.status) {
+            const statusLabels = {
+              pending: 'Pendente',
+              confirmed: 'Confirmado',
+              completed: 'Concluído',
+              cancelled: 'Cancelado'
+            };
+
+            toast.info('Agendamento atualizado!', {
+              description: `Status alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`
+            });
+
+            // Add notification to state
+            const appointmentUpdateNotification = {
+              id: `appointment_update_${payload.new.id}`,
+              title: 'Agendamento Atualizado',
+              message: `Status do agendamento alterado para: ${statusLabels[payload.new.status as keyof typeof statusLabels]}`,
+              type: 'info' as const,
+              created_at: new Date().toISOString(),
+              read: false
+            };
+
+            if (mountedRef.current) {
+              setNotifications(prev => [appointmentUpdateNotification, ...prev]);
+            }
+          }
+        }
+      )
       .subscribe((status) => {
-        console.log('Notifications subscription status:', status);
+        console.log('Unified notifications subscription status:', status);
         if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
           globalSubscriptionTracker.channelRef = null;
           globalSubscriptionTracker.isSubscribed = false;
