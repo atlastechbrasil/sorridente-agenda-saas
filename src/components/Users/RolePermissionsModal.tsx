@@ -74,17 +74,16 @@ export const RolePermissionsModal = ({ isOpen, onClose }: RolePermissionsModalPr
       }
 
       // Carregar roles customizados (além dos padrão)
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('role')
-        .not('role', 'in', '(admin,dentist,assistant)');
+      const { data: rolesData, error: rolesError } = await supabase
+        .from('custom_roles')
+        .select('name');
 
-      if (profilesError) {
-        console.error('Error loading custom roles:', profilesError);
+      if (rolesError && rolesError.code !== 'PGRST116') { // Ignore table doesn't exist error
+        console.error('Error loading custom roles:', rolesError);
       }
 
-      const uniqueCustomRoles = profilesData 
-        ? [...new Set(profilesData.map(p => p.role))]
+      const uniqueCustomRoles = rolesData 
+        ? rolesData.map(r => r.name)
         : [];
 
       setPermissions(permissionsData || []);
@@ -165,6 +164,17 @@ export const RolePermissionsModal = ({ isOpen, onClose }: RolePermissionsModalPr
     }
 
     try {
+      // Insert into custom_roles table
+      const { error } = await supabase
+        .from('custom_roles')
+        .insert({ name: newRoleName.toLowerCase() });
+
+      if (error) {
+        console.error('Error creating role:', error);
+        toast.error('Erro ao criar nova função');
+        return;
+      }
+
       setCustomRoles(prev => [...prev, newRoleName.toLowerCase()]);
       setNewRoleName('');
       toast.success('Nova função criada com sucesso!');
@@ -194,6 +204,18 @@ export const RolePermissionsModal = ({ isOpen, onClose }: RolePermissionsModalPr
       if (permError) {
         console.error('Error deleting role permissions:', permError);
         toast.error('Erro ao deletar permissões da função');
+        return;
+      }
+
+      // Remove from custom_roles table
+      const { error: roleError } = await supabase
+        .from('custom_roles')
+        .delete()
+        .eq('name', roleToDelete);
+
+      if (roleError) {
+        console.error('Error deleting custom role:', roleError);
+        toast.error('Erro ao deletar função');
         return;
       }
 

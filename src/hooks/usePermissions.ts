@@ -92,10 +92,12 @@ export const usePermissions = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user?.id, user?.role]); // Added user.role dependency
 
   const hasPermission = (permission: Permission): boolean => {
     if (!user) return false;
+    
+    console.log('Checking permission:', permission, 'User permissions:', userPermissions);
     
     // Verificar permissões do role principal
     if (userPermissions.includes(permission)) {

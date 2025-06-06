@@ -1,11 +1,11 @@
 
 import { Search, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Switch } from '@/components/ui/switch';
 import UserMenu from './UserMenu';
 import NotificationBell from './NotificationBell';
+import { GlobalSearch } from './GlobalSearch';
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -21,13 +21,7 @@ const Header = ({ onMenuClick }: HeaderProps) => {
           <Button variant="ghost" size="sm" onClick={onMenuClick}>
             <Menu className="h-5 w-5" />
           </Button>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="Buscar..."
-              className="pl-10 w-64"
-            />
-          </div>
+          <GlobalSearch />
         </div>
         
         <div className="flex items-center space-x-4">

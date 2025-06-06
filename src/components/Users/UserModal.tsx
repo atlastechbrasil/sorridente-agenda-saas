@@ -59,11 +59,15 @@ export const UserModal = ({ isOpen, onClose, onSave, user }: UserModalProps) => 
     try {
       setIsUpdating(true);
       
-      // Use admin API to update user password
-      const { error } = await supabase.auth.admin.updateUserById(
-        user.id,
-        { password: formData.password }
-      );
+      console.log('Updating password for user:', user.id);
+      
+      // Use edge function to update password with service role
+      const { data, error } = await supabase.functions.invoke('update-user-password', {
+        body: {
+          userId: user.id,
+          password: formData.password
+        }
+      });
 
       if (error) {
         console.error('Error updating password:', error);
@@ -71,6 +75,7 @@ export const UserModal = ({ isOpen, onClose, onSave, user }: UserModalProps) => 
         return false;
       }
 
+      console.log('Password updated successfully:', data);
       toast.success('Senha alterada com sucesso!');
       return true;
     } catch (error) {
